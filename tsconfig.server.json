@@ -1,0 +1,15 @@
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "module": "CommonJS",
+        "outDir": "dist",
+        "noEmit": false,
+        "isolatedModules": false,
+        "esModuleInterop": true,
+        "target": "ES2020"
+    },
+    "include": [
+        "server.ts",
+        "lib/socket.ts"
+    ]
+}

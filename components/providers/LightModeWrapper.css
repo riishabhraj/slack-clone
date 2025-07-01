@@ -1,0 +1,41 @@
+/* Light Mode Styles for Auth Pages */
+.light {
+    /* Override any dark mode styles */
+    background-color: white;
+    color: black;
+}
+
+.light * {
+    /* Force all children to use light mode colors */
+    --tw-text-opacity: 1;
+    color: rgba(17, 24, 39, var(--tw-text-opacity)) !important;
+}
+
+.light input {
+    background-color: white !important;
+    color: #111827 !important;
+    /* text-gray-900 equivalent */
+    border-color: #d1d5db !important;
+    /* border-gray-300 equivalent */
+}
+
+.light button {
+    color: initial !important;
+    /* Reset button text color to default */
+}
+
+.light p {
+    color: #111827 !important;
+    /* text-gray-900 equivalent */
+}
+
+/* Special handling for specific elements */
+.light .text-red-600 {
+    --tw-text-opacity: 1;
+    color: rgba(220, 38, 38, var(--tw-text-opacity)) !important;
+}
+
+.light .text-green-700 {
+    --tw-text-opacity: 1;
+    color: rgba(4, 120, 87, var(--tw-text-opacity)) !important;
+}

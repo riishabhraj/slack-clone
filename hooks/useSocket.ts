@@ -1,0 +1,255 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { io, Socket } from 'socket.io-client';
+import { useSession } from 'next-auth/react';
+import { ClientToServerEvents, ServerToClientEvents } from '@/lib/socket';
+import { useDebugLogger } from './useDebugLogger';
+
+// Socket.IO client includes additional events not in our type definitions
+// We'll use the any type for the socket instance to avoid TypeScript errors with reconnection events
+let socket: Socket | null = null;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 5;
+const RECONNECT_DELAY_MS = 2000;
+
+export function useSocket() {
+    const { data: session, status } = useSession();
+    const [isConnected, setIsConnected] = useState(false);
+    const { logEvent } = useDebugLogger();
+
+    useEffect(() => {
+        // Only initialize socket when session is authenticated
+        if (status !== 'authenticated') {
+            logEvent('Socket_Session_Not_Ready', { status });
+            return;
+        }
+
+        logEvent('Socket_Initialization', {
+            userId: session?.user?.id,
+            socketExists: !!socket
+        });
+
+        // Initialize socket if it doesn't exist or was previously disconnected
+        const initSocket = () => {
+            if (socket && socket.connected) {
+                logEvent('Socket_Already_Connected', { socketId: socket.id });
+                return;
+            }
+
+            // Create auth data
+            const authData = {
+                userId: session.user.id,
+                name: session.user.name,
+                image: session.user.image
+            };
+
+            // Create socket or reconnect
+            if (!socket) {
+                logEvent('Socket_Creating_New');
+
+                socket = io(process.env.NEXT_PUBLIC_SOCKET_URL || window.location.origin, {
+                    withCredentials: true,
+                    // Add path to match the Socket.IO server configuration
+                    path: '/api/socket/io',
+                    // Add reconnection options
+                    reconnection: true,
+                    reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
+                    reconnectionDelay: RECONNECT_DELAY_MS,
+                    timeout: 10000,
+                    // Pass user info from session
+                    auth: authData
+                });
+            } else if (!socket.connected) {
+                logEvent('Socket_Reconnecting_Existing');
+                socket.connect();
+            }
+
+            // Set up event listeners
+            socket.on('connect', () => {
+                logEvent('Socket_Connected', { socketId: socket?.id, userId: session?.user?.id });
+                setIsConnected(true);
+                reconnectAttempts = 0; // Reset reconnect attempts on successful connection
+
+                // Send authentication data
+                socket?.emit('authenticate', authData);
+            });
+
+            socket.on('disconnect', (reason) => {
+                logEvent('Socket_Disconnected', { reason });
+                setIsConnected(false);
+            });
+
+            socket.on('connect_error', (err) => {
+                logEvent('Socket_Connection_Error', { error: err.message });
+                setIsConnected(false);
+
+                // Manual reconnect logic if needed
+                if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                    reconnectAttempts++;
+                    logEvent('Socket_Manual_Reconnect', { attempts: reconnectAttempts });
+                    setTimeout(() => {
+                        socket?.connect();
+                    }, RECONNECT_DELAY_MS);
+                }
+            });
+
+            // @ts-ignore - reconnect event is part of socket.io-client but not in our type definitions
+            socket.on('reconnect', (attemptNumber: number) => {
+                logEvent('Socket_Reconnected', { attemptNumber });
+                setIsConnected(true);
+
+                // Re-send authentication data on reconnect
+                socket?.emit('authenticate', authData);
+            });
+
+            // @ts-ignore - reconnect_error event is part of socket.io-client but not in our type definitions
+            socket.on('reconnect_error', (err: Error) => {
+                logEvent('Socket_Reconnection_Error', { error: err.message });
+            });
+
+            // Handle authentication success/failure
+            socket.on('authenticated', () => {
+                logEvent('Socket_Authentication_Success');
+            });
+
+            socket.on('unauthorized', (error) => {
+                logEvent('Socket_Authentication_Failed', { error });
+            });
+        };
+
+        // Initialize the socket
+        initSocket();
+
+        // Clean up function just removes listeners, doesn't disconnect
+        return () => {
+            // We don't disconnect or destroy the socket, just clean up listeners specific to this hook instance
+            logEvent('Socket_Hook_Cleanup');
+        };
+    }, [status, session, logEvent]);
+
+    // Force reconnect function that can be called by debug UI if needed
+    const forceReconnect = () => {
+        if (socket) {
+            logEvent('Socket_Force_Reconnect');
+            socket.disconnect();
+
+            // Small timeout to ensure disconnect is processed
+            setTimeout(() => {
+                socket?.connect();
+            }, 500);
+        }
+    };
+
+    // Function to join a channel
+    const joinChannel = (channelId: string) => {
+        if (socket && isConnected) {
+            logEvent('Socket_Joining_Channel', { channelId, userId: session?.user?.id });
+            socket.emit('joinChannel', channelId);
+        } else {
+            logEvent('Socket_Join_Channel_Failed', {
+                channelId,
+                socketExists: !!socket,
+                isConnected
+            });
+        }
+    };
+
+    // Function to leave a channel
+    const leaveChannel = (channelId: string) => {
+        if (socket && isConnected) {
+            socket.emit('leaveChannel', channelId);
+        }
+    };
+
+    // Function to send a message via socket
+    const emitMessage = (channelId: string, content: string) => {
+        if (socket && isConnected) {
+            socket.emit('sendMessage', { channelId, content });
+            return true;
+        }
+        return false;
+    };
+
+    // Function to send a typing indicator
+    const sendTyping = (channelId: string) => {
+        if (socket && isConnected) {
+            socket.emit('typing', { channelId });
+        }
+    };
+
+    // Function to send a stop typing indicator
+    const sendStopTyping = (channelId: string) => {
+        if (socket && isConnected) {
+            socket.emit('stopTyping', { channelId });
+        }
+    };
+
+    // Function to call another user
+    const callUser = (to: string, channelId: string, signal: any, callType: 'audio' | 'video') => {
+        if (socket && isConnected) {
+            logEvent('Socket_Calling_User', {
+                to,
+                from: session?.user?.id,
+                channelId,
+                callType
+            });
+            socket.emit('callUser', { to, channelId, signal, callType });
+            return true;
+        } else {
+            logEvent('Socket_Call_User_Failed', {
+                to,
+                socketExists: !!socket,
+                isConnected
+            });
+            return false;
+        }
+    };
+
+    // Function to answer a call
+    const answerCall = (to: string, signal: any) => {
+        if (socket && isConnected) {
+            logEvent('Socket_Answering_Call', { to, from: session?.user?.id });
+            socket.emit('answerCall', { to, signal });
+            return true;
+        }
+        return false;
+    };
+
+    // Function to reject a call
+    const rejectCall = (to: string, reason?: string) => {
+        if (socket && isConnected) {
+            socket.emit('rejectCall', { to, reason });
+        }
+    };
+
+    // Function to end a call
+    const endCall = (to: string, reason?: string) => {
+        if (socket && isConnected) {
+            socket.emit('endCall', { to, reason });
+        }
+    };
+
+    // Function to send ICE candidate
+    const sendIceCandidate = (to: string, candidate: any) => {
+        if (socket && isConnected) {
+            socket.emit('sendIceCandidate', { to, candidate });
+        }
+    };
+
+    return {
+        socket: socket as Socket<ServerToClientEvents, ClientToServerEvents> | null,
+        isConnected,
+        forceReconnect,
+        joinChannel,
+        leaveChannel,
+        emitMessage,
+        sendTyping,
+        sendStopTyping,
+        callUser,
+        answerCall,
+        rejectCall,
+        endCall,
+        sendIceCandidate
+    };
+}
