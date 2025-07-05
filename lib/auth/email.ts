@@ -7,34 +7,41 @@ type EmailOptions = {
     html?: string;
 };
 
-// Create a transporter
-// In production, you would use OAuth2 or API keys instead of this test account
+// Create a transporter using the environment variables
 const createTransporter = async () => {
-    // For development/testing, use a test account
-    if (process.env.NODE_ENV !== 'production') {
-        const testAccount = await nodemailer.createTestAccount();
+    console.log('Creating email transporter with configuration:', {
+        host: process.env.EMAIL_SERVER_HOST,
+        port: parseInt(process.env.EMAIL_SERVER_PORT || '587'),
+        secure: process.env.EMAIL_SERVER_SECURE === 'true',
+        auth: {
+            user: process.env.EMAIL_SERVER_USER,
+            pass: '********' // Password masked for logging
+        }
+    });
+
+    // First try to use the configured SMTP server
+    if (process.env.EMAIL_SERVER_HOST && process.env.EMAIL_SERVER_USER && process.env.EMAIL_SERVER_PASSWORD) {
         return nodemailer.createTransport({
-            host: 'smtp.ethereal.email',
-            port: 587,
-            secure: false,
+            host: process.env.EMAIL_SERVER_HOST,
+            port: parseInt(process.env.EMAIL_SERVER_PORT || '587'),
+            secure: process.env.EMAIL_SERVER_SECURE === 'true',
             auth: {
-                user: testAccount.user,
-                pass: testAccount.pass,
+                user: process.env.EMAIL_SERVER_USER,
+                pass: process.env.EMAIL_SERVER_PASSWORD,
             },
         });
     }
 
-    // For production, use environment variables
+    // Fallback to Ethereal for development/testing
+    console.log('No email configuration found, falling back to Ethereal test account');
+    const testAccount = await nodemailer.createTestAccount();
     return nodemailer.createTransport({
-        service: process.env.EMAIL_SERVICE || 'gmail',
+        host: 'smtp.ethereal.email',
+        port: 587,
+        secure: false,
         auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASSWORD,
-            // For OAuth2:
-            // type: 'OAuth2',
-            // clientId: process.env.OAUTH_CLIENT_ID,
-            // clientSecret: process.env.OAUTH_CLIENT_SECRET,
-            // refreshToken: process.env.OAUTH_REFRESH_TOKEN,
+            user: testAccount.user,
+            pass: testAccount.pass,
         },
     });
 };
@@ -47,23 +54,36 @@ const createTransporter = async () => {
 export const sendEmail = async (options: EmailOptions) => {
     try {
         const transporter = await createTransporter();
+
+        const fromName = process.env.EMAIL_FROM_NAME || 'Slack Clone';
+        const fromAddress = process.env.EMAIL_FROM_ADDRESS || process.env.EMAIL_SERVER_USER || 'noreply@slackclone.com';
+        const from = `"${fromName}" <${fromAddress}>`;
+
+        console.log(`Sending email to: ${options.to}, from: ${from}, subject: ${options.subject}`);
+
         const info = await transporter.sendMail({
-            from: `"Slack Clone" <${process.env.EMAIL_FROM || 'noreply@slackclone.com'}>`,
+            from,
             to: options.to,
             subject: options.subject,
             text: options.text,
             html: options.html || options.text,
         });
 
-        if (process.env.NODE_ENV !== 'production') {
-            // In development, log the test URL to view the email
-            console.log('Email sent: %s', nodemailer.getTestMessageUrl(info));
+        // Always log the email URL if using Ethereal
+        if (info.messageId) {
+            console.log('Email sent, messageId:', info.messageId);
+
+            // For Ethereal test emails, get the preview URL
+            const previewUrl = nodemailer.getTestMessageUrl(info);
+            if (previewUrl) {
+                console.log('Email preview URL:', previewUrl);
+            }
         }
 
         return info;
     } catch (error) {
         console.error('Error sending email:', error);
-        throw new Error('Failed to send email');
+        throw new Error(`Failed to send email: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
 };
 

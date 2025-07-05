@@ -43,7 +43,9 @@ export function ChannelChat({ channelId }: ChannelChatProps) {
                     description={activeChannel.description}
                     memberCount={activeChannel.memberCount}
                     isPrivate={activeChannel.isPrivate}
-                    members={otherUsers} // Always pass other users for call functionality
+                    members={activeChannel.members}
+                    admins={activeChannel.admins}
+                    ownerId={activeChannel.ownerId}
                 />
             )}
 

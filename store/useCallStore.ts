@@ -2,6 +2,7 @@
 
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
+import { useEffect } from 'react';
 
 type CallStatus = 'idle' | 'calling' | 'ringing' | 'connected' | 'ended';
 type CallType = 'audio' | 'video';
@@ -96,6 +97,30 @@ export const useCallStore = create<CallState>()(
                 logStateChange('startCall', { callType, channelId, receiver });
 
                 try {
+                    // Pre-emptively ensure socket connection - this will help prevent socketDisconnected error
+                    // Note: We're using window access since the socket is in another hook
+                    try {
+                        if (typeof window !== 'undefined') {
+                            logStateChange('ensuring_socket_connection_before_call');
+                            const socketHooks = Object.values(window).filter(hook => hook && typeof hook === 'object' && 'ensureSocketConnection' in hook);
+                            if (socketHooks.length > 0) {
+                                // @ts-ignore - We know this exists
+                                const socketHook = socketHooks[0];
+                                // @ts-ignore - We know this exists
+                                if (typeof socketHook.ensureSocketConnection === 'function') {
+                                    // @ts-ignore - We know this exists
+                                    socketHook.ensureSocketConnection();
+                                    logStateChange('socket_connection_ensured');
+                                }
+                            } else {
+                                logStateChange('socket_hook_not_found');
+                            }
+                        }
+                    } catch (socketError) {
+                        logStateChange('socket_ensure_error', { error: (socketError as Error).message });
+                        // Non-fatal error, continue with call
+                    }
+
                     // Request media devices
                     const constraints: MediaStreamConstraints = {
                         audio: true,
@@ -134,6 +159,20 @@ export const useCallStore = create<CallState>()(
                     caller: call.caller
                 });
 
+                // Broadcast to other windows
+                try {
+                    const callChannel = new BroadcastChannel('slack_clone_calls');
+                    callChannel.postMessage({
+                        type: 'INCOMING_CALL',
+                        data: {
+                            to: call.to,
+                            call: call
+                        }
+                    });
+                } catch (error) {
+                    console.error('Failed to broadcast call:', error);
+                }
+
                 set({
                     status: 'ringing',
                     callType: call.callType,
@@ -150,7 +189,7 @@ export const useCallStore = create<CallState>()(
                 logStateChange('acceptCall');
 
                 try {
-                    const { callType, caller } = get();
+                    const { callType, caller, channelId } = get();
 
                     if (!callType) {
                         throw new Error('Cannot accept call: call type is not set');
@@ -158,6 +197,44 @@ export const useCallStore = create<CallState>()(
 
                     if (!caller) {
                         throw new Error('Cannot accept call: caller information is missing');
+                    }
+
+                    // Pre-emptively ensure socket connection - this will help prevent socketDisconnected error
+                    try {
+                        if (typeof window !== 'undefined') {
+                            logStateChange('ensuring_socket_connection_before_accept');
+                            const socketHooks = Object.values(window).filter(hook => hook && typeof hook === 'object' && 'ensureSocketConnection' in hook);
+                            if (socketHooks.length > 0) {
+                                // @ts-ignore - We know this exists
+                                const socketHook = socketHooks[0];
+                                // @ts-ignore - We know this exists
+                                if (typeof socketHook.ensureSocketConnection === 'function') {
+                                    // @ts-ignore - We know this exists
+                                    socketHook.ensureSocketConnection();
+                                    logStateChange('socket_connection_ensured_for_accept');
+                                }
+                            } else {
+                                logStateChange('socket_hook_not_found_for_accept');
+                            }
+                        }
+                    } catch (socketError) {
+                        logStateChange('socket_ensure_error_for_accept', { error: (socketError as Error).message });
+                        // Non-fatal error, continue with call
+                    }
+
+                    // Broadcast to other windows that call was accepted
+                    try {
+                        const callChannel = new BroadcastChannel('slack_clone_calls');
+                        callChannel.postMessage({
+                            type: 'CALL_ACCEPTED',
+                            data: {
+                                callId: channelId,
+                                callerId: caller.id
+                            }
+                        });
+                        logStateChange('broadcast_call_accepted', { channelId, callerId: caller.id });
+                    } catch (error) {
+                        console.error('Failed to broadcast call acceptance:', error);
                     }
 
                     // Request media devices
@@ -187,6 +264,25 @@ export const useCallStore = create<CallState>()(
             rejectCall: (reason) => {
                 logStateChange('rejectCall', { reason });
 
+                // Get the necessary data before resetting the state
+                const { channelId, caller } = get();
+
+                // Broadcast to other windows that call was rejected
+                try {
+                    const callChannel = new BroadcastChannel('slack_clone_calls');
+                    callChannel.postMessage({
+                        type: 'CALL_REJECTED',
+                        data: {
+                            callId: channelId,
+                            callerId: caller?.id,
+                            reason
+                        }
+                    });
+                    logStateChange('broadcast_call_rejected', { channelId, callerId: caller?.id });
+                } catch (error) {
+                    console.error('Failed to broadcast call rejection:', error);
+                }
+
                 set({
                     status: 'idle',
                     signalData: null,
@@ -199,7 +295,28 @@ export const useCallStore = create<CallState>()(
             endCall: () => {
                 logStateChange('endCall');
 
-                const { localStream } = get();
+                // Get the necessary data before manipulating the state
+                const { localStream, channelId, caller, receiver } = get();
+
+                // Broadcast to other windows that call has ended
+                try {
+                    const callChannel = new BroadcastChannel('slack_clone_calls');
+                    callChannel.postMessage({
+                        type: 'CALL_ENDED',
+                        data: {
+                            callId: channelId,
+                            callerId: caller?.id,
+                            receiverId: receiver?.id
+                        }
+                    });
+                    logStateChange('broadcast_call_ended', {
+                        channelId,
+                        callerId: caller?.id,
+                        receiverId: receiver?.id
+                    });
+                } catch (error) {
+                    console.error('Failed to broadcast call end:', error);
+                }
 
                 // Stop all tracks in the local stream
                 if (localStream) {
@@ -357,3 +474,60 @@ export const useCallStore = create<CallState>()(
         { name: 'call-store' }
     )
 );
+
+// Hook to listen for broadcast channel messages
+// This should be used in a component with access to the session
+export const useCallBroadcastListener = (session: any) => {
+    const receiveCall = useCallStore(state => state.receiveCall);
+    const reset = useCallStore(state => state.reset);
+    const status = useCallStore(state => state.status);
+    const channelId = useCallStore(state => state.channelId);
+
+    useEffect(() => {
+        if (!session?.user?.id) return;
+
+        // Create a BroadcastChannel for call notifications
+        const callChannel = new BroadcastChannel('slack_clone_calls');
+        console.log('[BroadcastChannel] Listening for call events with user ID:', session.user.id);
+
+        callChannel.onmessage = (event) => {
+            const { type, data } = event.data;
+            console.log('[BroadcastChannel] Received message:', type, data);
+
+            if (type === 'INCOMING_CALL' && data.to === session.user.id) {
+                // Receive call in all windows
+                console.log('[BroadcastChannel] Receiving incoming call in this window', data.call);
+                receiveCall(data.call);
+            }
+
+            if (type === 'CALL_ACCEPTED' && data.callId === channelId) {
+                // If another window accepted the call and we're showing the call UI, close it
+                if (status === 'ringing' || status === 'calling') {
+                    console.log('[BroadcastChannel] Call accepted in another window, resetting this instance');
+                    reset(); // Use reset to avoid another broadcast
+                }
+            }
+
+            if (type === 'CALL_REJECTED' && data.callId === channelId) {
+                // If another window rejected the call and we're showing the call UI, close it
+                if (status === 'ringing' || status === 'calling') {
+                    console.log('[BroadcastChannel] Call rejected in another window, resetting this instance');
+                    reset();
+                }
+            }
+
+            if (type === 'CALL_ENDED' && data.callId === channelId) {
+                // If call ended in another window, make sure it's ended here too
+                if (status !== 'idle') {
+                    console.log('[BroadcastChannel] Call ended in another window, resetting this instance');
+                    reset();
+                }
+            }
+        };
+
+        return () => {
+            console.log('[BroadcastChannel] Closing call channel listener');
+            callChannel.close();
+        };
+    }, [session?.user?.id, receiveCall, reset, status, channelId]);
+};

@@ -7,9 +7,12 @@ interface User {
     image: string | null;
     email?: string | null;
 }
-import { Hash, Info, UserPlus, Phone, Users, Video } from 'lucide-react';
+import { useState } from 'react';
+import { Hash, Info, UserPlus, Phone, Users, Video, Shield, CrownIcon } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import { useCallStore } from '@/store/useCallStore';
+import { useChannelStore } from '@/store/useChannelStore';
+import { ChannelMembers } from '@/components/channel/ChannelMembers';
 
 interface MessageHeaderProps {
     channelId: string;
@@ -18,6 +21,8 @@ interface MessageHeaderProps {
     memberCount?: number;
     isPrivate?: boolean;
     members?: User[];
+    admins?: User[];
+    ownerId?: string;
     onShowDetails?: () => void;
     onShowAddMembers?: () => void;
 }
@@ -29,12 +34,21 @@ export function MessageHeader({
     memberCount,
     isPrivate,
     members,
+    admins,
+    ownerId,
     onShowDetails,
     onShowAddMembers
 }: MessageHeaderProps) {
     const { data: session } = useSession();
     const { status, startCall } = useCallStore();
+    const { activeChannel } = useChannelStore();
     const isInCall = status !== 'idle';
+    const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+
+    // Check user permissions
+    const isCurrentUserOwner = session?.user?.id === ownerId || session?.user?.id === activeChannel?.ownerId;
+    const isCurrentUserAdmin = admins?.some(admin => admin.id === session?.user?.id) || isCurrentUserOwner ||
+        activeChannel?.admins?.some(admin => admin.id === session?.user?.id);
 
     // Find the first other member (not current user) for call
     const otherMembers = (members || []).filter(m => m.id !== session?.user?.id);
@@ -111,16 +125,23 @@ export function MessageHeader({
                     </button>
                 )}
 
-                {onShowAddMembers && (
-                    <button
-                        onClick={onShowAddMembers}
-                        className="p-2 rounded-full hover:bg-muted transition"
-                        aria-label="Add members"
-                    >
-                        <UserPlus className="h-4 w-4" />
-                    </button>
-                )}
+                {/* Show the invite button for channels */}
+                <button
+                    onClick={() => setIsInviteModalOpen(true)}
+                    className="p-2 rounded-full hover:bg-muted transition"
+                    aria-label="Manage channel members"
+                >
+                    <UserPlus className="h-4 w-4" />
+                </button>
             </div>
+
+            {/* Channel Members component for invitations and management */}
+            {isInviteModalOpen && (
+                <ChannelMembers
+                    channelId={channelId}
+                    onClose={() => setIsInviteModalOpen(false)}
+                />
+            )}
         </div>
     );
 }

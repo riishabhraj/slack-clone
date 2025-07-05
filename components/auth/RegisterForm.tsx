@@ -36,6 +36,12 @@ export default function RegisterForm() {
             setIsLoading(true);
             setError("");
 
+            console.log('Registering with data:', {
+                name: data.name,
+                email: data.email,
+                password: '********' // Don't log actual password
+            });
+
             const response = await fetch("/api/register", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -46,19 +52,38 @@ export default function RegisterForm() {
                 }),
             });
 
-            const result = await response.json();
+            // Log raw response status
+            console.log('Raw response status:', response.status);
+
+            let result;
+            try {
+                result = await response.json();
+                console.log('Registration response:', {
+                    status: response.status,
+                    success: result.success,
+                    message: result.message,
+                    requiresVerification: result.requiresVerification
+                });
+            } catch (jsonError) {
+                console.error('Error parsing response JSON:', jsonError);
+                setError("Invalid response from server. Please try again.");
+                return;
+            }
 
             if (!response.ok) {
+                console.error('Registration failed with status:', response.status);
                 setError(result.message || "Registration failed");
                 return;
             }
 
             if (result.requiresVerification) {
-                // Redirect to verification page
+                // Redirect to verification page with email parameter
+                console.log("Redirecting to verification page with email:", data.email);
                 router.push(`/verify?email=${encodeURIComponent(data.email)}`);
             } else {
                 // Redirect to login page
-                router.push("/login");
+                console.log("Redirecting to login page");
+                router.push("/login");  // Just redirect to login directly
             }
         } catch (err) {
             console.error("Registration error:", err);

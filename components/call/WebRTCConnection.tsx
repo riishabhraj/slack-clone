@@ -22,7 +22,8 @@ export function WebRTCConnection({ isInitiator }: WebRTCConnectionProps) {
         isConnected,
         callUser: socketCallUser,
         answerCall: socketAnswerCall,
-        sendIceCandidate
+        sendIceCandidate,
+        ensureSocketConnection // Add ensureSocketConnection to the destructured values
     } = useSocket();
 
     const {
@@ -154,16 +155,34 @@ export function WebRTCConnection({ isInitiator }: WebRTCConnectionProps) {
                 retryCount: socketRetryCount
             });
 
-            // If socket is the only issue, retry
+            // If socket is disconnected, try to reconnect immediately first using ensureSocketConnection
+            if (missingRequirements.socketDisconnected) {
+                logEvent('Immediate_Socket_Reconnect_Attempt');
+                try {
+                    // Use the ensureSocketConnection function which is more robust than just socket.connect()
+                    const connected = ensureSocketConnection();
+                    logEvent('Socket_Connection_Result', { connected });
+                } catch (e) {
+                    logEvent('Immediate_Socket_Reconnect_Error', { error: (e as Error).message });
+                }
+            }
+
+            // If socket is the only issue, retry with exponential backoff
             if (missingRequirements.socketDisconnected && !missingRequirements.sessionMissing &&
                 !missingRequirements.streamMissing && socketRetryCount < 5) {
 
                 logEvent('Scheduling_Socket_Retry', { retryCount: socketRetryCount + 1 });
 
-                // Schedule retry with exponential backoff (1s, 2s, 4s, 8s)
+                // Schedule retry with exponential backoff (1s, 2s, 4s, 8s, 10s)
                 socketRetryRef.current = setTimeout(() => {
+                    // Try to force reconnect if we have access to that function
+                    if (typeof socket?.connect === 'function') {
+                        logEvent('Retry_Socket_Connect');
+                        socket.connect();
+                    }
+
                     setSocketRetryCount(prev => prev + 1);
-                }, Math.min(1000 * (2 ** socketRetryCount), 8000));
+                }, Math.min(1000 * (2 ** socketRetryCount), 10000));
 
                 return;
             }

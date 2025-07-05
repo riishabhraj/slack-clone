@@ -63,10 +63,46 @@ export default function ChannelPage() {
 
     // Error state
     if (error) {
+        // Special handling for access denied errors
+        if (error === 'ACCESS_DENIED') {
+            return (
+                <Shell>
+                    <div className="flex flex-col items-center justify-center h-full p-4">
+                        <div className="text-center max-w-md">
+                            <Users className="h-16 w-16 text-amber-500 mx-auto mb-4" />
+                            <h3 className="text-lg font-semibold mb-2">Private Channel</h3>
+                            <p className="text-gray-500 dark:text-gray-400">
+                                This is a private channel that you don't have access to.
+                                You need an invitation from a channel member to join.
+                            </p>
+                        </div>
+                    </div>
+                </Shell>
+            );
+        }
+
+        // Special handling for not found errors
+        if (error === 'NOT_FOUND') {
+            return (
+                <Shell>
+                    <div className="flex flex-col items-center justify-center h-full p-4">
+                        <div className="text-center max-w-md">
+                            <Info className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                            <h3 className="text-lg font-semibold mb-2">Channel Not Found</h3>
+                            <p className="text-gray-500 dark:text-gray-400">
+                                The channel you're looking for doesn't exist or may have been deleted.
+                            </p>
+                        </div>
+                    </div>
+                </Shell>
+            );
+        }
+
+        // Generic error state
         return (
             <Shell>
                 <div className="flex flex-col items-center justify-center h-full p-4">
-                    <div className="bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 p-4 rounded-md">
+                    <div className="bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 p-4 rounded-md max-w-md">
                         <h3 className="text-lg font-semibold mb-2">Error</h3>
                         <p>{error}</p>
                     </div>

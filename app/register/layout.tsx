@@ -1,9 +1,13 @@
-import { LightModeWrapper } from "@/components/providers/LightModeWrapper";
+import React from "react";
 
 export default function RegisterLayout({
     children,
 }: {
     children: React.ReactNode;
 }) {
-    return <LightModeWrapper>{children}</LightModeWrapper>;
+    return (
+        <div className="register-container bg-white text-black min-h-screen">
+            {children}
+        </div>
+    );
 }

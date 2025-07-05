@@ -24,8 +24,10 @@ export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
         const { email, otp } = body;
+        console.log('Verifying OTP for email:', email);
 
         if (!email || !otp) {
+            console.error('Verification failed: Email or OTP is missing');
             return NextResponse.json(
                 { success: false, message: 'Email and OTP are required' },
                 { status: 400 }
@@ -33,11 +35,15 @@ export async function POST(req: NextRequest) {
         }
 
         // Find the user by email
+        console.log('Finding user with email:', email);
         const user = await prisma.user.findUnique({
             where: { email },
         }) as unknown as UserWithVerification;
 
+        console.log('User found:', user ? `ID: ${user.id}, isVerified: ${user.isVerified}` : 'User not found');
+
         if (!user) {
+            console.error('Verification failed: User not found');
             return NextResponse.json(
                 { success: false, message: 'User not found' },
                 { status: 404 }
@@ -46,6 +52,7 @@ export async function POST(req: NextRequest) {
 
         // Check if account is already verified
         if (user.isVerified) {
+            console.log('Account already verified');
             return NextResponse.json({
                 success: true,
                 message: 'Account already verified',
@@ -58,6 +65,7 @@ export async function POST(req: NextRequest) {
             const timeLeft = Math.ceil(
                 (user.verificationLockUntil.getTime() - new Date().getTime()) / 1000 / 60
             );
+            console.log(`Verification locked. Try again in ${timeLeft} minutes.`);
             return NextResponse.json(
                 {
                     success: false,
@@ -70,7 +78,9 @@ export async function POST(req: NextRequest) {
         }
 
         // Check if OTP is expired
+        console.log('OTP expiry:', user.otpExpires);
         if (!user.otpExpires || isOTPExpired(user.otpExpires)) {
+            console.log('OTP has expired');
             return NextResponse.json(
                 { success: false, message: 'OTP has expired. Please request a new one.' },
                 { status: 400 }
@@ -78,12 +88,15 @@ export async function POST(req: NextRequest) {
         }
 
         // Verify OTP
+        console.log('Verifying OTP:', otp, 'against stored hash');
         const isValid = await verifyOTP(otp, user.hashedOtp);
+        console.log('OTP verification result:', isValid ? 'valid' : 'invalid');
 
         if (!isValid) {
             // Increment verification attempts
             const updatedAttempts = (user.verificationAttempts || 0) + 1;
             const lockUntil = calculateLockUntil(updatedAttempts);
+            console.log('Invalid OTP. Incrementing attempts to:', updatedAttempts);
 
             await prisma.$executeRaw`
                 UPDATE "User"
@@ -99,22 +112,32 @@ export async function POST(req: NextRequest) {
         }
 
         // OTP is valid, mark account as verified
-        await prisma.$executeRaw`
-            UPDATE "User"
-            SET "isVerified" = true,
-                "emailVerified" = ${new Date()},
-                "hashedOtp" = null,
-                "otpExpires" = null,
-                "verificationAttempts" = 0,
-                "verificationLockUntil" = null
-            WHERE id = ${user.id}
-        `;
+        console.log('OTP is valid, marking account as verified');
+        try {
+            await prisma.$executeRaw`
+                UPDATE "User"
+                SET "isVerified" = true,
+                    "emailVerified" = ${new Date()},
+                    "hashedOtp" = null,
+                    "otpExpires" = null,
+                    "verificationAttempts" = 0,
+                    "verificationLockUntil" = null
+                WHERE id = ${user.id}
+            `;
+            console.log('User successfully verified:', user.id);
 
-        return NextResponse.json({
-            success: true,
-            message: 'Account verified successfully',
-            isVerified: true,
-        });
+            return NextResponse.json({
+                success: true,
+                message: 'Account verified successfully',
+                isVerified: true,
+            });
+        } catch (updateError) {
+            console.error('Error updating user verification status:', updateError);
+            return NextResponse.json(
+                { success: false, message: 'Error updating verification status' },
+                { status: 500 }
+            );
+        }
 
     } catch (error) {
         console.error('Verification error:', error);

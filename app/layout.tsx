@@ -4,6 +4,10 @@ import "./globals.css";
 import SessionProvider from "@/components/providers/SessionProvider";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { RealTimeProvider } from "@/components/providers/RealTimeProvider";
+import { CallBroadcastManager } from "@/components/call/CallBroadcastManager";
+import { CallDebugger } from "@/components/call/CallDebugger";
+import { CallTester } from "@/components/call/CallTester";
+import { CallSocket } from "@/components/call/CallSocket";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -33,6 +37,10 @@ export default function RootLayout({
         <ThemeProvider defaultTheme="system" storageKey="slack-clone-theme">
           <SessionProvider>
             <RealTimeProvider>
+              <CallBroadcastManager />
+              <CallSocket />
+              <CallDebugger />
+              <CallTester />
               {children}
             </RealTimeProvider>
           </SessionProvider>

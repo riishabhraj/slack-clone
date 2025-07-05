@@ -12,13 +12,13 @@ export async function GET(
         const session = await getServerSession(authOptions);
 
         if (!session?.user?.email) {
-            return new NextResponse("Unauthorized", { status: 401 });
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
         const { channelId } = params;
 
         if (!channelId) {
-            return new NextResponse("Channel ID is required", { status: 400 });
+            return NextResponse.json({ error: "Channel ID is required" }, { status: 400 });
         }
 
         // Fetch channel with details
@@ -42,6 +42,18 @@ export async function GET(
                         email: true
                     }
                 },
+                channelAdmins: {
+                    include: {
+                        user: {
+                            select: {
+                                id: true,
+                                name: true,
+                                image: true,
+                                email: true
+                            }
+                        }
+                    }
+                },
                 _count: {
                     select: {
                         members: true,
@@ -52,7 +64,7 @@ export async function GET(
         });
 
         if (!channel) {
-            return new NextResponse("Channel not found", { status: 404 });
+            return NextResponse.json({ error: "Channel not found" }, { status: 404 });
         }
 
         // Check if user is a member of this channel
@@ -60,19 +72,34 @@ export async function GET(
 
         // For private channels, only members can see details
         if (channel.isPrivate && !isMember) {
-            return new NextResponse("You don't have access to this channel", { status: 403 });
+            return NextResponse.json(
+                {
+                    error: "ACCESS_DENIED",
+                    message: "You don't have access to this private channel"
+                },
+                { status: 403 }
+            );
         }
+
+        // Process admin information from channelAdmins
+        const admins = channel.channelAdmins.map((admin) => admin.user);
+        const adminUserIds = admins.map((admin) => admin.id);
+        const isAdmin = adminUserIds.includes(session.user.id) || channel.ownerId === session.user.id;
 
         return NextResponse.json({
             ...channel,
             isMember,
+            isAdmin,
+            adminUserIds,
+            admins,
+            channelAdmins: undefined, // Remove the channelAdmins object from response
             memberCount: channel._count.members,
             messageCount: channel._count.messages,
             _count: undefined // Remove the _count object from response
         });
     } catch (error) {
         console.error("Error fetching channel:", error);
-        return new NextResponse("Internal error", { status: 500 });
+        return NextResponse.json({ error: "Internal error" }, { status: 500 });
     }
 }
 
@@ -85,7 +112,7 @@ export async function PUT(
         const session = await getServerSession(authOptions);
 
         if (!session?.user?.email) {
-            return new NextResponse("Unauthorized", { status: 401 });
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
         const { channelId } = params;
@@ -93,7 +120,7 @@ export async function PUT(
         const { name, description, isPrivate } = body;
 
         if (!channelId) {
-            return new NextResponse("Channel ID is required", { status: 400 });
+            return NextResponse.json({ error: "Channel ID is required" }, { status: 400 });
         }
 
         // Verify channel exists
@@ -104,12 +131,12 @@ export async function PUT(
         });
 
         if (!channel) {
-            return new NextResponse("Channel not found", { status: 404 });
+            return NextResponse.json({ error: "Channel not found" }, { status: 404 });
         }
 
         // Only the owner can update the channel
         if (channel.ownerId !== session.user.id) {
-            return new NextResponse("You don't have permission to update this channel", { status: 403 });
+            return NextResponse.json({ error: "You don't have permission to update this channel" }, { status: 403 });
         }
 
         // If updating name, check if new name is not already taken
@@ -121,7 +148,7 @@ export async function PUT(
             });
 
             if (existingChannel) {
-                return new NextResponse("Channel name already taken", { status: 409 });
+                return NextResponse.json({ error: "Channel name already taken" }, { status: 409 });
             }
         }
 
@@ -140,7 +167,7 @@ export async function PUT(
         return NextResponse.json(updatedChannel);
     } catch (error) {
         console.error("Error updating channel:", error);
-        return new NextResponse("Internal error", { status: 500 });
+        return NextResponse.json({ error: "Internal error" }, { status: 500 });
     }
 }
 
@@ -153,13 +180,13 @@ export async function DELETE(
         const session = await getServerSession(authOptions);
 
         if (!session?.user?.email) {
-            return new NextResponse("Unauthorized", { status: 401 });
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
         const { channelId } = params;
 
         if (!channelId) {
-            return new NextResponse("Channel ID is required", { status: 400 });
+            return NextResponse.json({ error: "Channel ID is required" }, { status: 400 });
         }
 
         // Verify channel exists
@@ -170,12 +197,12 @@ export async function DELETE(
         });
 
         if (!channel) {
-            return new NextResponse("Channel not found", { status: 404 });
+            return NextResponse.json({ error: "Channel not found" }, { status: 404 });
         }
 
         // Only the owner can delete the channel
         if (channel.ownerId !== session.user.id) {
-            return new NextResponse("You don't have permission to delete this channel", { status: 403 });
+            return NextResponse.json({ error: "You don't have permission to delete this channel" }, { status: 403 });
         }
 
         // Delete all messages in the channel first (cascade delete will handle this if configured)
@@ -192,9 +219,9 @@ export async function DELETE(
             }
         });
 
-        return new NextResponse("Channel deleted successfully", { status: 200 });
+        return NextResponse.json({ success: true, message: "Channel deleted successfully" }, { status: 200 });
     } catch (error) {
         console.error("Error deleting channel:", error);
-        return new NextResponse("Internal error", { status: 500 });
+        return NextResponse.json({ error: "Internal error" }, { status: 500 });
     }
 }

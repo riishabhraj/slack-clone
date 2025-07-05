@@ -6,7 +6,7 @@ export default function LoginLayout({
     children: React.ReactNode;
 }) {
     return (
-        <div className="login-container">
+        <div className="login-container bg-white text-black min-h-screen">
             {children}
         </div>
     );

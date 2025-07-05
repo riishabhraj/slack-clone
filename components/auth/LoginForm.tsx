@@ -6,6 +6,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FaGithub } from "react-icons/fa";
 import { FcGoogle } from "react-icons/fc";
+import Link from "next/link";
 
 const loginFormSchema = z.object({
     email: z.string().email({ message: "Invalid email address" }),
@@ -96,16 +97,26 @@ const LoginForm = () => {
     };
 
     return (
-        <div className="flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-white">
             <div className="max-w-md w-full space-y-8">
                 <div>
-                    <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">Sign in to your account</h2>
+                    <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-700">Sign in to your account</h2>
                 </div>
 
                 <div className="bg-white py-8 px-4 shadow-lg rounded-lg sm:px-10">
                     {successMessage && (
-                        <div className="mb-4 bg-green-50 border-l-4 border-green-400 text-green-700 p-4 rounded">
-                            <p className="text-sm">{successMessage}</p>
+                        <div className="mb-6 bg-green-50 border border-green-400 text-green-700 p-4 rounded-md">
+                            <div className="flex">
+                                <div className="flex-shrink-0">
+                                    <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                    </svg>
+                                </div>
+                                <div className="ml-3">
+                                    <p className="text-sm font-medium">{successMessage}</p>
+                                    <p className="mt-1 text-xs text-green-600">You can now sign in with your email and password.</p>
+                                </div>
+                            </div>
                         </div>
                     )}
 
@@ -113,7 +124,8 @@ const LoginForm = () => {
                         <div className="mb-4 bg-red-50 border-l-4 border-red-400 text-red-700 p-4 rounded">
                             <p className="text-sm">{error}</p>
                         </div>
-                    )}                    {/* Social Sign In Buttons */}
+                    )}
+                    {/* Social Sign In Buttons */}
                     <div className="space-y-3 mb-6">
                         <button
                             type="button"
@@ -165,7 +177,7 @@ const LoginForm = () => {
                                     },
                                 })}
                             />
-                            {errors.email && <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.email.message}</p>}
+                            {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>}
                         </div>
 
                         <div>
@@ -186,7 +198,7 @@ const LoginForm = () => {
                                     },
                                 })}
                             />
-                            {errors.password && <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.password.message}</p>}
+                            {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>}
                         </div>
 
                         <div className="flex items-center justify-between flex-wrap gap-2">
@@ -248,16 +260,16 @@ const LoginForm = () => {
                         <div className="text-center">
                             <p className="text-sm text-gray-600">
                                 Don't have an account?{" "}
-                                <a href="/signup" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
+                                <Link href="/register" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
                                     Sign up here
-                                </a>
+                                </Link>
                             </p>
                         </div>
                     </form>
                 </div>
             </div>
         </div>
-    )
-}
+    );
+};
 
 export default LoginForm;

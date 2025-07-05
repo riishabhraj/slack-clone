@@ -23,6 +23,12 @@ export interface Channel {
         image: string | null;
         email: string | null;
     }>;
+    admins?: Array<{
+        id: string;
+        name: string | null;
+        image: string | null;
+        email: string | null;
+    }>;
     latestMessage?: {
         id: string;
         content: string;
@@ -48,6 +54,9 @@ interface ChannelState {
     removeChannel: (channelId: string) => void;
     joinChannel: (channelId: string) => void;
     leaveChannel: (channelId: string) => void;
+    inviteUserToChannel: (channelId: string, userId: string) => Promise<string | null>;
+    promoteToChannelOwner: (channelId: string, userId: string) => Promise<string | null>;
+    makeChannelAdmin: (channelId: string, userId: string) => Promise<string | null>;
     fetchChannels: () => Promise<void>;
     fetchChannelDetails: (channelId: string) => Promise<void>;
     updateLatestMessage: (channelId: string, message: {
@@ -165,6 +174,22 @@ export const useChannelStore = create<ChannelState>()(
                     const response = await fetch(`/api/channels/${channelId}`);
 
                     if (!response.ok) {
+                        // Try to parse error details from the response
+                        try {
+                            const errorData = await response.json();
+                            if (errorData && errorData.error) {
+                                throw new Error(errorData.error);
+                            }
+                        } catch (parseError) {
+                            // If we can't parse the error, fall back to status code checks
+                            if (response.status === 403) {
+                                throw new Error('ACCESS_DENIED');
+                            } else if (response.status === 404) {
+                                throw new Error('NOT_FOUND');
+                            }
+                        }
+
+                        // Generic error fallback
                         throw new Error('Failed to fetch channel details');
                     }
 
@@ -179,10 +204,98 @@ export const useChannelStore = create<ChannelState>()(
                     }));
                 } catch (error) {
                     console.error('Error fetching channel details:', error);
+                    // Store the specific error code
+                    const errorMessage = error instanceof Error ? error.message : 'An error occurred';
+
                     set({
-                        error: error instanceof Error ? error.message : 'An error occurred',
+                        error: errorMessage,
                         isLoading: false
                     });
+                }
+            }, inviteUserToChannel: async (channelId, userId) => {
+                if (!channelId || !userId) return 'Missing channel or user ID';
+
+                try {
+                    const response = await fetch(`/api/channels/${channelId}/invite`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ userId })
+                    });
+
+                    if (!response.ok) {
+                        const data = await response.json().catch(() => null);
+                        throw new Error(data?.message || 'Failed to invite user');
+                    }
+
+                    const data = await response.json();
+
+                    // Refresh channel details to update member list
+                    get().fetchChannelDetails(channelId);
+
+                    return null; // No error
+                } catch (error) {
+                    console.error('Error inviting user to channel:', error);
+                    return error instanceof Error ? error.message : 'An error occurred';
+                }
+            },
+
+            promoteToChannelOwner: async (channelId, userId) => {
+                if (!channelId || !userId) return 'Missing channel or user ID';
+
+                try {
+                    const response = await fetch(`/api/channels/${channelId}/promote`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ userId })
+                    });
+
+                    if (!response.ok) {
+                        const data = await response.json().catch(() => null);
+                        throw new Error(data?.message || 'Failed to promote user');
+                    }
+
+                    const data = await response.json();
+
+                    // Refresh channel details to update owner information
+                    get().fetchChannelDetails(channelId);
+
+                    return null; // No error
+                } catch (error) {
+                    console.error('Error promoting user to channel owner:', error);
+                    return error instanceof Error ? error.message : 'An error occurred';
+                }
+            },
+
+            makeChannelAdmin: async (channelId, userId) => {
+                if (!channelId || !userId) return 'Missing channel or user ID';
+
+                try {
+                    const response = await fetch(`/api/channels/${channelId}/make-admin`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ userId })
+                    });
+
+                    if (!response.ok) {
+                        const data = await response.json().catch(() => null);
+                        throw new Error(data?.message || 'Failed to make user an admin');
+                    }
+
+                    const data = await response.json();
+
+                    // Refresh channel details to update admin information
+                    get().fetchChannelDetails(channelId);
+
+                    return null; // No error
+                } catch (error) {
+                    console.error('Error making user a channel admin:', error);
+                    return error instanceof Error ? error.message : 'An error occurred';
                 }
             },
 

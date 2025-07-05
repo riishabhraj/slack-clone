@@ -12,13 +12,13 @@ export async function POST(
         const session = await getServerSession(authOptions);
 
         if (!session?.user?.email) {
-            return new NextResponse("Unauthorized", { status: 401 });
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
         const { channelId } = params;
 
         if (!channelId) {
-            return new NextResponse("Channel ID is required", { status: 400 });
+            return NextResponse.json({ error: "Channel ID is required" }, { status: 400 });
         }
 
         // Check if channel exists
@@ -29,7 +29,7 @@ export async function POST(
         });
 
         if (!channel) {
-            return new NextResponse("Channel not found", { status: 404 });
+            return NextResponse.json({ error: "Channel not found" }, { status: 404 });
         }
 
         // Check if user is already a member of the channel
@@ -45,7 +45,7 @@ export async function POST(
         });
 
         if (membership) {
-            return new NextResponse("User is already a member of this channel", { status: 409 });
+            return NextResponse.json({ error: "User is already a member of this channel" }, { status: 409 });
         }
 
         // Add user to the channel
@@ -62,10 +62,10 @@ export async function POST(
             }
         });
 
-        return new NextResponse("Joined channel successfully", { status: 200 });
+        return NextResponse.json({ success: true, message: "Joined channel successfully" }, { status: 200 });
     } catch (error) {
         console.error("Error joining channel:", error);
-        return new NextResponse("Internal error", { status: 500 });
+        return NextResponse.json({ error: "Internal error" }, { status: 500 });
     }
 }
 
@@ -78,13 +78,13 @@ export async function DELETE(
         const session = await getServerSession(authOptions);
 
         if (!session?.user?.email) {
-            return new NextResponse("Unauthorized", { status: 401 });
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
         const { channelId } = params;
 
         if (!channelId) {
-            return new NextResponse("Channel ID is required", { status: 400 });
+            return NextResponse.json({ error: "Channel ID is required" }, { status: 400 });
         }
 
         // Check if channel exists
@@ -95,12 +95,12 @@ export async function DELETE(
         });
 
         if (!channel) {
-            return new NextResponse("Channel not found", { status: 404 });
+            return NextResponse.json({ error: "Channel not found" }, { status: 404 });
         }
 
         // Check if user is trying to leave a channel they own
         if (channel.ownerId === session.user.id) {
-            return new NextResponse("Channel owner cannot leave their own channel", { status: 403 });
+            return NextResponse.json({ error: "Channel owner cannot leave their own channel" }, { status: 403 });
         }
 
         // Check if user is a member of the channel
@@ -116,7 +116,7 @@ export async function DELETE(
         });
 
         if (!membership) {
-            return new NextResponse("User is not a member of this channel", { status: 404 });
+            return NextResponse.json({ error: "User is not a member of this channel" }, { status: 404 });
         }
 
         // Remove user from the channel
@@ -133,9 +133,9 @@ export async function DELETE(
             }
         });
 
-        return new NextResponse("Left channel successfully", { status: 200 });
+        return NextResponse.json({ success: true, message: "Left channel successfully" }, { status: 200 });
     } catch (error) {
         console.error("Error leaving channel:", error);
-        return new NextResponse("Internal error", { status: 500 });
+        return NextResponse.json({ error: "Internal error" }, { status: 500 });
     }
 }

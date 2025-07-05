@@ -10,7 +10,7 @@ interface ConnectedUser {
     isConnected: boolean;
 }
 
-// Define interface for socket debug info
+// Define interface for socket debug info - only used in development
 interface SocketDebugInfo {
     socketsCount: number;
     uniqueUsersCount: number;
@@ -88,8 +88,13 @@ export async function GET(req: Request) {
                     }))
                 };
 
-                console.log(`Socket.IO status: ${clientsCount} clients connected, ${uniqueUsers} unique users`);
-                console.log('Socket debug info:', JSON.stringify(debugInfo, null, 2));
+                if (process.env.NODE_ENV !== 'production') {
+                    console.log(`Socket.IO status: ${clientsCount} clients connected, ${uniqueUsers} unique users`);
+                    // Only log debug info in development
+                    if (process.env.NODE_ENV === 'development') {
+                        console.log('Socket debug info:', JSON.stringify(debugInfo, null, 2));
+                    }
+                }
             } catch (err) {
                 console.error('Error fetching socket information:', err);
             }
@@ -109,7 +114,8 @@ export async function GET(req: Request) {
             message: isSocketServerRunning
                 ? `Socket.IO server is running with ${clientsCount} clients connected`
                 : "Socket.IO server status unknown. Make sure you're using the custom server (server.ts)",
-            debugInfo: isSocketServerRunning ? debugInfo : undefined,
+            // Only include debug info in development
+            debugInfo: isSocketServerRunning && process.env.NODE_ENV === 'development' ? debugInfo : undefined,
             connectedUsers: isSocketServerRunning ? connectedUsers : []
         };
 
