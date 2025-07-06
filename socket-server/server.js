@@ -7,7 +7,7 @@ const cors = require('cors');
 const app = express();
 app.use(cors({
     origin: process.env.NODE_ENV === 'production'
-        ? ['https://your-frontend-domain.vercel.app'] // Replace with your Vercel app domain
+        ? '*' // Allow any origin in production - you can limit this to your Vercel app domain
         : ['http://localhost:3000'],
     methods: ['GET', 'POST'],
     credentials: true
