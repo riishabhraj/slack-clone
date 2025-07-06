@@ -9,6 +9,8 @@
     "vercel-build": "prisma generate --no-engine && next build",
     "build": "npm run vercel-build",
     "start": "node server.js",
+    "start:next": "next start",
+    "start:prod": "NODE_ENV=production node server.js",
     "lint": "next lint",
     "approve-builds": "pnpm approve-builds @prisma/client @prisma/engines @tailwindcss/oxide bcrypt prisma sharp unrs-resolver"
   },

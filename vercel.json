@@ -7,11 +7,6 @@
     "regions": [
         "iad1"
     ],
-    "functions": {
-        "api/socket/**": {
-            "maxDuration": 60
-        }
-    },
     "git": {
         "deploymentEnabled": {
             "main": true

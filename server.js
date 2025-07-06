@@ -7,7 +7,7 @@ const next = require('next');
 const { Server } = require('socket.io');
 
 const dev = process.env.NODE_ENV !== 'production';
-const hostname = 'localhost';
+const hostname = dev ? 'localhost' : '0.0.0.0';
 const port = process.env.PORT || (dev ? 3001 : 3000);
 
 // prepare next app

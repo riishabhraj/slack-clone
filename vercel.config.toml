@@ -1,0 +1,15 @@
+[build]
+  command = "pnpm run build"
+
+# This section specifies that the site should be deployed with Node.js
+[build.environment]
+  NODE_VERSION = "20.x"
+
+# Custom headers for Socket.IO endpoints
+[[headers]]
+  for = "/api/socket/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Methods = "GET, POST, OPTIONS"
+    Access-Control-Allow-Headers = "Origin, X-Requested-With, Content-Type, Accept"
+    Access-Control-Allow-Credentials = "true"

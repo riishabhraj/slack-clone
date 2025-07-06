@@ -57,21 +57,18 @@ export function useSocket() {
                 logEvent('Socket_Forcing_Disconnect_Before_Reconnect');
                 socket.disconnect();
                 socket = null;
-            }
-
-            // Create new socket
+            }            // Create new socket
             logEvent('Socket_Creating_New', { userId: session.user.id });
 
-            // In production, use secure WebSocket if available
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const host = window.location.host;
+            // Use the NEXT_PUBLIC_SOCKET_URL if available, otherwise fall back to origin
             const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || window.location.origin;
 
-            logEvent('Socket_URL', { socketUrl });
+            logEvent('Socket_URL', { socketUrl, usingExternalSocket: !!process.env.NEXT_PUBLIC_SOCKET_URL });
 
             socket = io(socketUrl, {
                 withCredentials: true,
-                path: '/api/socket/io',
+                // Use /socket.io path when connecting to external socket server, /api/socket/io for built-in
+                path: process.env.NEXT_PUBLIC_SOCKET_URL ? '/socket.io' : '/api/socket/io',
                 reconnection: true,
                 reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
                 reconnectionDelay: RECONNECT_DELAY_MS,
