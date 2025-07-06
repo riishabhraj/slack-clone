@@ -8,7 +8,7 @@ const { Server } = require('socket.io');
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = 'localhost';
-const port = 3001;
+const port = process.env.PORT || (dev ? 3001 : 3000);
 
 // prepare next app
 const app = next({ dev, hostname, port });
@@ -25,10 +25,13 @@ app.prepare().then(() => {
     const io = new Server(server, {
         path: '/api/socket/io',
         cors: {
-            origin: dev ? ['http://localhost:3000'] : false,
+            origin: dev ? ['http://localhost:3000'] : true, // Allow any origin in production
             methods: ['GET', 'POST'],
             credentials: true
-        }
+        },
+        // Add this configuration for production
+        allowEIO3: true,
+        transports: ['polling', 'websocket']
     });    // Socket.IO events
     io.on('connection', (socket) => {
         console.log(`Socket connected: ${socket.id}`);

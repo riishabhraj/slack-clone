@@ -6,13 +6,16 @@ const nextConfig: NextConfig = {
     config.externals = [...(config.externals || []), { "bufferutil": "bufferutil", "utf-8-validate": "utf-8-validate" }];
     return config;
   },
-  // Configure rewrites to support Socket.IO when using the standard Next.js dev server
-  // This isn't needed when using the custom server.ts approach
+  // Configure rewrites to support Socket.IO in both dev and production environments
   async rewrites() {
     return [
       {
+        source: '/api/socket/io/:path*',
+        destination: '/api/socket/io/:path*',
+      },
+      {
         source: '/socket.io/:path*',
-        destination: '/api/socket', // Handled by the socket API route
+        destination: '/api/socket/:path*', // Handled by the socket API route
       }
     ];
   },

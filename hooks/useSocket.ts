@@ -61,13 +61,22 @@ export function useSocket() {
 
             // Create new socket
             logEvent('Socket_Creating_New', { userId: session.user.id });
-            socket = io(process.env.NEXT_PUBLIC_SOCKET_URL || window.location.origin, {
+
+            // In production, use secure WebSocket if available
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const host = window.location.host;
+            const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || window.location.origin;
+
+            logEvent('Socket_URL', { socketUrl });
+
+            socket = io(socketUrl, {
                 withCredentials: true,
                 path: '/api/socket/io',
                 reconnection: true,
                 reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
                 reconnectionDelay: RECONNECT_DELAY_MS,
                 timeout: CONNECTION_TIMEOUT_MS,
+                transports: ['websocket', 'polling'], // Try WebSocket first, then fall back to polling
                 auth: authData
             });
 

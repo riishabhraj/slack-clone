@@ -1,0 +1,17 @@
+# This file configures the deployment to use server.js as the entry point
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[functions]
+  node_bundler = "esbuild"
+
+[[redirects]]
+  from = "/api/socket/io/*"
+  to = "/api/socket/io/:splat"
+  status = 200
+  force = true
+
+# Specify Node.js version
+[build.environment]
+  NODE_VERSION = "20.x"
