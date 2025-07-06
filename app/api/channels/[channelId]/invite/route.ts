@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/options";
 import prisma from "@/lib/prismadb";
+import { ChannelWithMembers } from "@/types/prisma";
 
 // POST /api/channels/[channelId]/invite - Invite a user to a channel
 export async function POST(
@@ -44,7 +45,7 @@ export async function POST(
                     }
                 }
             }
-        });
+        }) as ChannelWithMembers | null;
 
         if (!channel) {
             return NextResponse.json({ error: "Channel not found" }, { status: 404 });
@@ -65,7 +66,7 @@ export async function POST(
         // Check if the requester is an owner or admin of the channel
         const isRequesterOwner = channel.ownerId === session.user.id;
         const isRequesterAdmin = channel.channelAdmins.some(
-            admin => admin.userId === session.user.id
+            (admin) => admin.userId === session.user.id
         );
 
         if (!isRequesterOwner && !isRequesterAdmin) {

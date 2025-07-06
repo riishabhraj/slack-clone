@@ -5,10 +5,13 @@
   "scripts": {
     "dev": "next dev",
     "dev:socket": "node server.js",
-    "build": "next build",
+    "postinstall": "prisma generate",
+    "vercel-build": "prisma generate --no-engine && next build",
+    "build": "npm run vercel-build",
     "start": "node server.js",
     "start:next": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "approve-builds": "pnpm approve-builds @prisma/client @prisma/engines @tailwindcss/oxide bcrypt prisma sharp unrs-resolver"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.9.1",
