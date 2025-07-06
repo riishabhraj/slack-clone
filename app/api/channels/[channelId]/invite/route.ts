@@ -6,7 +6,7 @@ import prisma from "@/lib/prismadb";
 // POST /api/channels/[channelId]/invite - Invite a user to a channel
 export async function POST(
     request: Request,
-    { params }: { params: { channelId: string } }
+    { params }: { params: Promise<{ channelId: string }> }
 ) {
     try {
         const session = await getServerSession(authOptions);
@@ -15,7 +15,7 @@ export async function POST(
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const { channelId } = params;
+        const { channelId } = await params;
         const body = await request.json();
         const { userId } = body; // The ID of the user to invite
 

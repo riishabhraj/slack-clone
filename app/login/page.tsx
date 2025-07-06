@@ -2,10 +2,10 @@
 
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, Suspense } from "react";
 import LoginForm from "@/components/auth/LoginForm";
 
-export default function LoginPage() {
+function LoginContent() {
     const router = useRouter();
     const { status } = useSession();
     const searchParams = useSearchParams();
@@ -19,4 +19,12 @@ export default function LoginPage() {
 
     // Using key with the verified param ensures the form re-renders when coming from verification
     return <LoginForm key={`login-form-${verified ? 'verified' : 'normal'}`} />;
+}
+
+export default function LoginPage() {
+    return (
+        <Suspense fallback={<div>Loading...</div>}>
+            <LoginContent />
+        </Suspense>
+    );
 }

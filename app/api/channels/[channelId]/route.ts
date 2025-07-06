@@ -6,7 +6,7 @@ import prisma from "@/lib/prismadb";
 // GET /api/channels/[channelId] - Get channel details
 export async function GET(
     request: Request,
-    { params }: { params: { channelId: string } }
+    { params }: { params: Promise<{ channelId: string }> }
 ) {
     try {
         const session = await getServerSession(authOptions);
@@ -15,7 +15,7 @@ export async function GET(
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const { channelId } = params;
+        const { channelId } = await params;
 
         if (!channelId) {
             return NextResponse.json({ error: "Channel ID is required" }, { status: 400 });
@@ -106,7 +106,7 @@ export async function GET(
 // PUT /api/channels/[channelId] - Update channel
 export async function PUT(
     request: Request,
-    { params }: { params: { channelId: string } }
+    { params }: { params: Promise<{ channelId: string }> }
 ) {
     try {
         const session = await getServerSession(authOptions);
@@ -115,7 +115,7 @@ export async function PUT(
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const { channelId } = params;
+        const { channelId } = await params;
         const body = await request.json();
         const { name, description, isPrivate } = body;
 
@@ -174,7 +174,7 @@ export async function PUT(
 // DELETE /api/channels/[channelId] - Delete channel
 export async function DELETE(
     request: Request,
-    { params }: { params: { channelId: string } }
+    { params }: { params: Promise<{ channelId: string }> }
 ) {
     try {
         const session = await getServerSession(authOptions);
@@ -183,7 +183,7 @@ export async function DELETE(
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const { channelId } = params;
+        const { channelId } = await params;
 
         if (!channelId) {
             return NextResponse.json({ error: "Channel ID is required" }, { status: 400 });

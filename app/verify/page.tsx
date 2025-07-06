@@ -1,9 +1,10 @@
 "use client";
 
+import { Suspense } from "react";
 import VerifyForm from "@/components/auth/VerifyForm";
 
-export default function VerifyPage() {
-    console.log("I am here")
+function VerifyContent() {
+    console.log("I am here");
     return (
         <div className="flex min-h-screen flex-col items-center justify-center py-12 bg-gray-50">
             <div className="w-full max-w-md space-y-8 px-4">
@@ -19,5 +20,13 @@ export default function VerifyPage() {
                 <VerifyForm />
             </div>
         </div>
+    );
+}
+
+export default function VerifyPage() {
+    return (
+        <Suspense fallback={<div className="flex min-h-screen items-center justify-center">Loading...</div>}>
+            <VerifyContent />
+        </Suspense>
     );
 }
