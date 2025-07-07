@@ -5,11 +5,15 @@ import { useSession } from 'next-auth/react';
 import { useCallStore } from '@/store/useCallStore';
 import { useSocket } from '@/hooks/useSocket';
 
-/**
- * CallTester component provides a simple UI to test call functionality
- * This is only visible in development mode and when the URL has ?testCalls=true
- */
+// This component is only for development testing and is completely disabled in production
+// Return empty component in production to avoid any API calls or rendering
 export function CallTester() {
+    // Early return for production - never render anything
+    if (process.env.NODE_ENV === 'production') {
+        return null;
+    }
+
+    // The rest of this component will only run in development
     const { data: session } = useSession();
     const userId = session?.user?.id;
     const [users, setUsers] = useState<Array<{ id: string, name: string }>>([]);
@@ -42,18 +46,19 @@ export function CallTester() {
                 }
             } catch (err) {
                 setError('An error occurred while fetching users');
-                console.error(err);
+                if (process.env.NODE_ENV !== 'production') {
+                    console.error(err);
+                }
             } finally {
                 setLoading(false);
             }
         };
 
         fetchUsers();
-    }, [userId]);
-
-    // Fetch debug info every few seconds
+    }, [userId]);    // Fetch debug info every few seconds - DEVELOPMENT MODE ONLY
     useEffect(() => {
-        if (!userId) return;
+        // Only run this in development mode
+        if (!userId || process.env.NODE_ENV !== 'development') return;
 
         const fetchDebugInfo = async () => {
             try {
@@ -63,25 +68,17 @@ export function CallTester() {
                     setDebugInfo(data);
                 }
             } catch (err) {
-                // Silently handle errors in production
-                if (process.env.NODE_ENV !== 'production') {
-                    console.error('Error fetching debug info:', err);
-                }
+                console.error('Error fetching debug info:', err);
             }
         };
 
         // Fetch immediately
         fetchDebugInfo();
 
-        // Then every 5 seconds, but only in development mode
-        let interval: NodeJS.Timeout | null = null;
-        if (process.env.NODE_ENV === 'development') {
-            interval = setInterval(fetchDebugInfo, 5000);
-        }
+        // Then every 5 seconds
+        const interval = setInterval(fetchDebugInfo, 5000);
 
-        return () => {
-            if (interval) clearInterval(interval);
-        };
+        return () => clearInterval(interval);
     }, [userId]);
 
     // Initiate a call to the selected user
@@ -106,7 +103,9 @@ export function CallTester() {
             );
         } catch (err) {
             setError('Failed to start call');
-            console.error(err);
+            if (process.env.NODE_ENV !== 'production') {
+                console.error(err);
+            }
         }
     };
 
