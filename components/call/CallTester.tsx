@@ -63,16 +63,25 @@ export function CallTester() {
                     setDebugInfo(data);
                 }
             } catch (err) {
-                console.error('Error fetching debug info:', err);
+                // Silently handle errors in production
+                if (process.env.NODE_ENV !== 'production') {
+                    console.error('Error fetching debug info:', err);
+                }
             }
         };
 
         // Fetch immediately
         fetchDebugInfo();
 
-        // Then every 5 seconds
-        const interval = setInterval(fetchDebugInfo, 5000);
-        return () => clearInterval(interval);
+        // Then every 5 seconds, but only in development mode
+        let interval: NodeJS.Timeout | null = null;
+        if (process.env.NODE_ENV === 'development') {
+            interval = setInterval(fetchDebugInfo, 5000);
+        }
+
+        return () => {
+            if (interval) clearInterval(interval);
+        };
     }, [userId]);
 
     // Initiate a call to the selected user
@@ -101,11 +110,11 @@ export function CallTester() {
         }
     };
 
-    // Check if testing mode is enabled
+    // Check if testing mode is enabled - only allow in development
     const isTestMode =
+        process.env.NODE_ENV === 'development' &&
         typeof window !== 'undefined' &&
-        (new URLSearchParams(window.location.search).get('testCalls') === 'true') &&
-        process.env.NODE_ENV === 'development';
+        new URLSearchParams(window.location.search).get('testCalls') === 'true';
 
     if (!isTestMode || !userId) {
         return null;
