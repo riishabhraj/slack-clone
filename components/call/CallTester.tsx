@@ -55,30 +55,26 @@ export function CallTester() {
         };
 
         fetchUsers();
-    }, [userId]);    // Fetch debug info every few seconds - DEVELOPMENT MODE ONLY
+    }, [userId]);    // Debug info is disabled - using static mock data instead
     useEffect(() => {
-        // Only run this in development mode
-        if (!userId || process.env.NODE_ENV !== 'development') return;
+        if (!userId) return;
 
-        const fetchDebugInfo = async () => {
-            try {
-                const response = await fetch('/api/debug/call');
-                if (response.ok) {
-                    const data = await response.json();
-                    setDebugInfo(data);
-                }
-            } catch (err) {
-                console.error('Error fetching debug info:', err);
-            }
-        };
+        // Use mock data instead of fetching
+        setDebugInfo({
+            status: 'ok',
+            callInfo: {
+                activeCallCount: 0,
+                activeCalls: [],
+                socketConnected: true,
+                lastCallEvent: null,
+            },
+            socketInfo: {
+                connected: true,
+                connectedUsers: 0,
+            },
+            message: 'Debug call API is disabled'
+        });
 
-        // Fetch immediately
-        fetchDebugInfo();
-
-        // Then every 5 seconds
-        const interval = setInterval(fetchDebugInfo, 5000);
-
-        return () => clearInterval(interval);
     }, [userId]);
 
     // Initiate a call to the selected user

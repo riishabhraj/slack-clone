@@ -57,20 +57,13 @@ interface CallState {
 const logStateChange = (actionName: string, data?: any) => {
     console.log(`[CallStore] ${actionName}`, data || '');
 
-    // Also log to the debug API if in a browser environment
-    if (typeof window !== 'undefined') {
+    // Debug logging is disabled
+    if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'production') {
         try {
-            fetch('/api/debug/log', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    event: `CallStore_${actionName}`,
-                    data: data || {},
-                    userId: 'store' // We don't have access to the session here
-                }),
-            }).catch(err => console.error('Failed to log to debug API:', err));
+            // Just log to console in development
+            console.log(`[CallStore_${actionName}]`, data || {});
         } catch (error) {
-            // Ignore any fetch errors
+            // Ignore any console errors
         }
     }
 };

@@ -60,15 +60,16 @@ export function useSocket() {
             }            // Create new socket
             logEvent('Socket_Creating_New', { userId: session.user.id });
 
-            // Use the NEXT_PUBLIC_SOCKET_URL if available, otherwise fall back to origin
-            const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || window.location.origin;
+            // In development, force use of http not ws protocol to avoid certificate issues
+            const socketUrl = process.env.NODE_ENV === 'development'
+                ? 'http://localhost:4000'  // Hard-code to HTTP in development
+                : (process.env.NEXT_PUBLIC_SOCKET_URL || window.location.origin);
 
-            logEvent('Socket_URL', { socketUrl, usingExternalSocket: !!process.env.NEXT_PUBLIC_SOCKET_URL });
+            logEvent('Socket_URL', { socketUrl, usingExternalSocket: true });
 
             socket = io(socketUrl, {
                 withCredentials: true,
-                // Use /socket.io path when connecting to external socket server, /api/socket/io for built-in
-                path: process.env.NEXT_PUBLIC_SOCKET_URL ? '/socket.io' : '/api/socket/io',
+                path: '/socket.io', // Always use /socket.io path for consistency
                 reconnection: true,
                 reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
                 reconnectionDelay: RECONNECT_DELAY_MS,

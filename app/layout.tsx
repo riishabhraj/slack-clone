@@ -5,7 +5,7 @@ import SessionProvider from "@/components/providers/SessionProvider";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { RealTimeProvider } from "@/components/providers/RealTimeProvider";
 import { CallBroadcastManager } from "@/components/call/CallBroadcastManager";
-import { CallDebugger } from "@/components/call/CallDebugger";
+// Debug components are removed in production
 import { CallTester } from "@/components/call/CallTester";
 import { CallSocket } from "@/components/call/CallSocket";
 
@@ -39,7 +39,7 @@ export default function RootLayout({
             <RealTimeProvider>
               <CallBroadcastManager />
               <CallSocket />
-              <CallDebugger />
+              {/* Debug components removed */}
               <CallTester />
               {children}
             </RealTimeProvider>
