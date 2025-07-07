@@ -5,9 +5,11 @@
   "scripts": {
     "dev": "next dev",
     "dev:socket": "node server.js",
-    "postinstall": "prisma generate",
-    "vercel-build": "prisma generate --no-engine && next build",
+    "postinstall": "node scripts/prisma-generate.js",
+    "prisma:generate": "node scripts/prisma-generate.js",
+    "vercel-build": "node scripts/vercel-build.js",
     "build": "npm run vercel-build",
+    "build:no-optimize": "NEXT_DISABLE_OPTIMIZATION=true next build",
     "start": "node server.js",
     "start:next": "next start",
     "start:prod": "NODE_ENV=production node server.js",

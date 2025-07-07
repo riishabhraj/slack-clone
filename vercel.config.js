@@ -10,7 +10,9 @@ module.exports = {
     },
     env: {
         // Public environment variables that should be available to the client
-        NEXT_PUBLIC_SOCKET_URL: process.env.NEXT_PUBLIC_SOCKET_URL || ''
+        NEXT_PUBLIC_SOCKET_URL: process.env.NEXT_PUBLIC_SOCKET_URL || '',
+        // Disable critters/CSS optimization to avoid dependency issues
+        NEXT_DISABLE_OPTIMIZATION: 'true'
     },
     // Configure headers for CORS
     async headers() {

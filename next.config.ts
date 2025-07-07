@@ -29,8 +29,8 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   experimental: {
-    // Reduce memory usage during build
-    optimizeCss: true,
+    // Disable CSS optimization to avoid critters dependency issues
+    optimizeCss: false,
     // Optimize bundle size
     optimizePackageImports: ['react-icons', '@radix-ui/react-icons'],
   },
