@@ -5,8 +5,6 @@ import SessionProvider from "@/components/providers/SessionProvider";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { RealTimeProvider } from "@/components/providers/RealTimeProvider";
 import { CallBroadcastManager } from "@/components/call/CallBroadcastManager";
-// Debug components are removed in production
-import { CallTester } from "@/components/call/CallTester";
 import { CallSocket } from "@/components/call/CallSocket";
 
 const geistSans = Geist({
@@ -39,8 +37,6 @@ export default function RootLayout({
             <RealTimeProvider>
               <CallBroadcastManager />
               <CallSocket />
-              {/* Debug components removed */}
-              <CallTester />
               {children}
             </RealTimeProvider>
           </SessionProvider>

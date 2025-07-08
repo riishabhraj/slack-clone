@@ -10,19 +10,6 @@ interface ConnectedUser {
     isConnected: boolean;
 }
 
-// Define interface for socket debug info - only used in development
-interface SocketDebugInfo {
-    socketsCount: number;
-    uniqueUsersCount: number;
-    socketsInfo: Array<{
-        id: string;
-        rooms: string[];
-        userId: string;
-        userName: string;
-    }>;
-
-}
-
 // Create a global object to store Socket.IO server instance
 declare global {
     var socketIOServer: SocketIOServer | null;
@@ -42,11 +29,6 @@ export async function GET(req: Request) {
 
         // Get connected clients count if server is running
         let clientsCount = 0;
-        let debugInfo: SocketDebugInfo = {
-            socketsCount: 0,
-            uniqueUsersCount: 0,
-            socketsInfo: []
-        };
         let connectedUsers: ConnectedUser[] = [];
 
         if (isSocketServerRunning && global.socketIOServer) {
@@ -54,7 +36,7 @@ export async function GET(req: Request) {
                 // @ts-ignore - accessing internal socket.io properties
                 clientsCount = global.socketIOServer.engine?.clientsCount || 0;
 
-                // Get some debug information about sockets
+                // Get sockets
                 const sockets = await global.socketIOServer.fetchSockets();
 
                 // Extract more detailed user info from socket handshakes
@@ -73,28 +55,6 @@ export async function GET(req: Request) {
                         isConnected
                     };
                 });
-
-                // Count unique users (might have multiple connections)
-                const uniqueUsers = new Set(connectedUsers.map(u => u.id)).size;
-
-                debugInfo = {
-                    socketsCount: sockets.length,
-                    uniqueUsersCount: uniqueUsers,
-                    socketsInfo: sockets.map(socket => ({
-                        id: socket.id,
-                        rooms: Array.from(socket.rooms || []),
-                        userId: socket.handshake?.auth?.userId || 'unknown',
-                        userName: socket.handshake?.auth?.name || 'unknown'
-                    }))
-                };
-
-                if (process.env.NODE_ENV !== 'production') {
-                    console.log(`Socket.IO status: ${clientsCount} clients connected, ${uniqueUsers} unique users`);
-                    // Only log debug info in development
-                    if (process.env.NODE_ENV === 'development') {
-                        console.log('Socket debug info:', JSON.stringify(debugInfo, null, 2));
-                    }
-                }
             } catch (err) {
                 console.error('Error fetching socket information:', err);
             }
@@ -104,7 +64,6 @@ export async function GET(req: Request) {
         interface SocketAPIResponse {
             success: boolean;
             message: string;
-            debugInfo?: SocketDebugInfo;
             connectedUsers: ConnectedUser[];
         }
 
@@ -114,8 +73,6 @@ export async function GET(req: Request) {
             message: isSocketServerRunning
                 ? `Socket.IO server is running with ${clientsCount} clients connected`
                 : "Socket.IO server status unknown. Make sure you're using the custom server (server.ts)",
-            // Only include debug info in development
-            debugInfo: isSocketServerRunning && process.env.NODE_ENV === 'development' ? debugInfo : undefined,
             connectedUsers: isSocketServerRunning ? connectedUsers : []
         };
 

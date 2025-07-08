@@ -3,3 +3,10 @@ node_modules
 .next
 *.log
 .env*.local
+
+# Ignore any debug directories
+**/debug
+**/debug/**/*
+app/debug
+app/api/debug
+**/*debug*

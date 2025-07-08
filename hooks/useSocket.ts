@@ -4,7 +4,6 @@ import { useEffect, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useSession } from 'next-auth/react';
 import { ClientToServerEvents, ServerToClientEvents } from '@/lib/socket';
-import { useDebugLogger } from './useDebugLogger';
 
 // Socket.IO client includes additional events not in our type definitions
 // We'll use the any type for the socket instance to avoid TypeScript errors with reconnection events
@@ -17,7 +16,6 @@ const CONNECTION_TIMEOUT_MS = 15000; // Increased timeout for slower connections
 export function useSocket() {
     const { data: session, status } = useSession();
     const [isConnected, setIsConnected] = useState(false);
-    const { logEvent } = useDebugLogger();
 
     // Create a heartbeat to detect disconnections that the socket library doesn't catch
     useEffect(() => {
@@ -36,7 +34,6 @@ export function useSocket() {
     // Connection manager function
     const ensureSocketConnection = useCallback(() => {
         if (status !== 'authenticated' || !session?.user?.id) {
-            logEvent('Socket_Session_Not_Ready', { status });
             return false;
         }
 
@@ -54,18 +51,15 @@ export function useSocket() {
 
             // Force disconnect if socket exists but isn't connected
             if (socket && !socket.connected) {
-                logEvent('Socket_Forcing_Disconnect_Before_Reconnect');
                 socket.disconnect();
                 socket = null;
-            }            // Create new socket
-            logEvent('Socket_Creating_New', { userId: session.user.id });
+            }
 
+            // Create new socket
             // In development, force use of http not ws protocol to avoid certificate issues
             const socketUrl = process.env.NODE_ENV === 'development'
                 ? 'http://localhost:4000'  // Hard-code to HTTP in development
                 : (process.env.NEXT_PUBLIC_SOCKET_URL || window.location.origin);
-
-            logEvent('Socket_URL', { socketUrl, usingExternalSocket: true });
 
             socket = io(socketUrl, {
                 withCredentials: true,
@@ -83,10 +77,9 @@ export function useSocket() {
 
             return true;
         } catch (error) {
-            logEvent('Socket_Creation_Error', { error: (error as Error).message });
             return false;
         }
-    }, [status, session, logEvent]);
+    }, [status, session]);
 
     // Setup function for socket event listeners
     const setupSocketListeners = useCallback((authData: any) => {
@@ -94,7 +87,6 @@ export function useSocket() {
 
         // Set up event listeners
         socket.on('connect', () => {
-            logEvent('Socket_Connected', { socketId: socket?.id, userId: session?.user?.id });
             setIsConnected(true);
             reconnectAttempts = 0; // Reset reconnect attempts on successful connection
 
@@ -102,19 +94,16 @@ export function useSocket() {
             socket?.emit('authenticate', authData);
         });
 
-        socket.on('disconnect', (reason) => {
-            logEvent('Socket_Disconnected', { reason });
+        socket.on('disconnect', () => {
             setIsConnected(false);
         });
 
-        socket.on('connect_error', (err) => {
-            logEvent('Socket_Connection_Error', { error: err.message });
+        socket.on('connect_error', () => {
             setIsConnected(false);
 
             // Manual reconnect logic if needed
             if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
                 reconnectAttempts++;
-                logEvent('Socket_Manual_Reconnect', { attempts: reconnectAttempts });
                 setTimeout(() => {
                     socket?.connect();
                 }, RECONNECT_DELAY_MS);
@@ -122,41 +111,19 @@ export function useSocket() {
         });
 
         // @ts-ignore - reconnect event is part of socket.io-client but not in our type definitions
-        socket.on('reconnect', (attemptNumber: number) => {
-            logEvent('Socket_Reconnected', { attemptNumber });
+        socket.on('reconnect', () => {
             setIsConnected(true);
 
             // Re-send authentication data on reconnect
             socket?.emit('authenticate', authData);
         });
-
-        // @ts-ignore - reconnect_error event is part of socket.io-client but not in our type definitions
-        socket.on('reconnect_error', (err: Error) => {
-            logEvent('Socket_Reconnection_Error', { error: err.message });
-        });
-
-        // Handle authentication success/failure
-        socket.on('authenticated', () => {
-            logEvent('Socket_Authentication_Success');
-        });
-
-        socket.on('unauthorized', (error) => {
-            logEvent('Socket_Authentication_Failed', { error });
-        });
-    }, [logEvent, session?.user?.id]);
+    }, []);
 
     useEffect(() => {
         // Only initialize socket when session is authenticated
         if (status !== 'authenticated') {
-            logEvent('Socket_Session_Not_Ready', { status });
             return;
         }
-
-        logEvent('Socket_Initialization', {
-            userId: session?.user?.id,
-            socketExists: !!socket,
-            socketConnected: socket?.connected
-        });
 
         // Create auth data
         const authData = {
@@ -169,7 +136,6 @@ export function useSocket() {
         if (!socket) {
             ensureSocketConnection();
         } else if (!socket.connected) {
-            logEvent('Socket_Reconnecting_Existing');
             socket.connect();
         }
 
@@ -179,14 +145,12 @@ export function useSocket() {
         // Clean up function just removes listeners, doesn't disconnect
         return () => {
             // We don't disconnect or destroy the socket, just clean up listeners specific to this hook instance
-            logEvent('Socket_Hook_Cleanup');
         };
-    }, [status, session, logEvent, setupSocketListeners, ensureSocketConnection]);
+    }, [status, session, setupSocketListeners, ensureSocketConnection]);
 
-    // Force reconnect function that can be called by debug UI if needed
+    // Force reconnect function that can be called if needed
     const forceReconnect = () => {
         if (socket) {
-            logEvent('Socket_Force_Reconnect');
             socket.disconnect();
 
             // Small timeout to ensure disconnect is processed
@@ -199,14 +163,7 @@ export function useSocket() {
     // Function to join a channel
     const joinChannel = (channelId: string) => {
         if (socket && isConnected) {
-            logEvent('Socket_Joining_Channel', { channelId, userId: session?.user?.id });
             socket.emit('joinChannel', channelId);
-        } else {
-            logEvent('Socket_Join_Channel_Failed', {
-                channelId,
-                socketExists: !!socket,
-                isConnected
-            });
         }
     };
 
@@ -243,28 +200,13 @@ export function useSocket() {
     // Function to call another user
     const callUser = (to: string, channelId: string, signal: any, callType: 'audio' | 'video') => {
         if (!ensureSocketConnection()) {
-            logEvent('Socket_Call_User_Failed', {
-                to,
-                reason: 'Could not ensure socket connection'
-            });
             return false;
         }
 
         if (socket && isConnected) {
-            logEvent('Socket_Calling_User', {
-                to,
-                from: session?.user?.id,
-                channelId,
-                callType
-            });
             socket.emit('callUser', { to, channelId, signal, callType });
             return true;
         } else {
-            logEvent('Socket_Call_User_Failed', {
-                to,
-                socketExists: !!socket,
-                isConnected
-            });
             return false;
         }
     };
@@ -272,15 +214,10 @@ export function useSocket() {
     // Function to answer a call
     const answerCall = (to: string, signal: any) => {
         if (!ensureSocketConnection()) {
-            logEvent('Socket_Answer_Call_Failed', {
-                to,
-                reason: 'Could not ensure socket connection'
-            });
             return false;
         }
 
         if (socket && isConnected) {
-            logEvent('Socket_Answering_Call', { to, from: session?.user?.id });
             socket.emit('answerCall', { to, signal });
             return true;
         }

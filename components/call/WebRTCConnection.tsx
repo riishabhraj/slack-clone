@@ -5,7 +5,6 @@ import Peer from 'simple-peer';
 import { useSocket } from '@/hooks/useSocket';
 import { useSession } from 'next-auth/react';
 import { useCallStore } from '@/store/useCallStore';
-import { useDebugLogger } from '@/hooks/useDebugLogger';
 
 interface WebRTCConnectionProps {
     isInitiator: boolean;
@@ -13,7 +12,6 @@ interface WebRTCConnectionProps {
 
 export function WebRTCConnection({ isInitiator }: WebRTCConnectionProps) {
     const { data: session } = useSession();
-    const { logEvent } = useDebugLogger();
     const [isPeerInitialized, setIsPeerInitialized] = useState(false);
     const [socketRetryCount, setSocketRetryCount] = useState(0);
     const socketRetryRef = useRef<NodeJS.Timeout | null>(null);
@@ -42,18 +40,7 @@ export function WebRTCConnection({ isInitiator }: WebRTCConnectionProps) {
 
     // Log component initialization
     useEffect(() => {
-        logEvent('WebRTCConnection_Mounted', {
-            isInitiator,
-            status,
-            socketConnected: isConnected,
-            hasLocalStream: !!localStream,
-            hasSignalData: !!signalData,
-            caller: caller || null,
-            receiver: receiver || null
-        });
-
         return () => {
-            logEvent('WebRTCConnection_Unmounted', { isInitiator });
             // Clear any retry timers on unmount
             if (socketRetryRef.current) {
                 clearTimeout(socketRetryRef.current);
@@ -68,38 +55,23 @@ export function WebRTCConnection({ isInitiator }: WebRTCConnectionProps) {
             return;
         }
 
-        logEvent('SocketListeners_Setup', { isInitiator, socketConnected: isConnected });
-
         // Handle incoming answer to our call
         const handleCallAnswer = ({ signal, from }: { from: string; to: string; signal: any }) => {
-            logEvent('CallAnswer_Received', { from, signal: !!signal });
-
             if (peerRef.current && isInitiator) {
                 try {
-                    logEvent('Applying_Answer_Signal', { peerExists: !!peerRef.current });
                     peerRef.current.signal(signal);
                 } catch (error) {
-                    logEvent('Error_Applying_Answer', { error: (error as Error).message });
                     console.error('Error applying answer signal:', error);
                 }
-            } else {
-                logEvent('Cannot_Apply_Answer', {
-                    hasPeer: !!peerRef.current,
-                    isInitiator
-                });
             }
         };
 
         // Handle ICE candidates
         const handleIceCandidate = ({ candidate, from }: { from: string; to: string; candidate: any }) => {
-            logEvent('ICE_Candidate_Received', { from });
-
             if (peerRef.current) {
                 try {
-                    logEvent('Applying_ICE_Candidate');
                     peerRef.current.signal({ type: 'candidate', candidate });
                 } catch (error) {
-                    logEvent('Error_Applying_ICE', { error: (error as Error).message });
                     console.error('Error applying ICE candidate:', error);
                 }
             }
@@ -107,7 +79,6 @@ export function WebRTCConnection({ isInitiator }: WebRTCConnectionProps) {
 
         // Handle call ended
         const handleCallEnded = ({ from }: { from: string; to: string; reason?: string }) => {
-            logEvent('Call_Ended_By_Remote', { from });
             endCall();
         };
 
@@ -123,10 +94,8 @@ export function WebRTCConnection({ isInitiator }: WebRTCConnectionProps) {
             socket.off('iceCandidate', handleIceCandidate);
             socket.off('callEnded', handleCallEnded);
             socket.off('callRejected', handleCallEnded);
-
-            logEvent('SocketListeners_Cleaned', { isInitiator });
         };
-    }, [socket, isConnected, session?.user?.id, endCall, isInitiator, logEvent]);
+    }, [socket, isConnected, session?.user?.id, endCall, isInitiator]);
 
     // Create and manage the peer connection with auto retry for socket connection
     useEffect(() => {
@@ -148,22 +117,13 @@ export function WebRTCConnection({ isInitiator }: WebRTCConnectionProps) {
 
         // If any requirement is missing
         if (hasMissingRequirements) {
-            // Log the attempt and missing requirements
-            logEvent('Peer_Creation_Requirements_Check', {
-                ...missingRequirements,
-                willRetry: missingRequirements.socketDisconnected && socketRetryCount < 5,
-                retryCount: socketRetryCount
-            });
-
             // If socket is disconnected, try to reconnect immediately first using ensureSocketConnection
             if (missingRequirements.socketDisconnected) {
-                logEvent('Immediate_Socket_Reconnect_Attempt');
                 try {
                     // Use the ensureSocketConnection function which is more robust than just socket.connect()
                     const connected = ensureSocketConnection();
-                    logEvent('Socket_Connection_Result', { connected });
                 } catch (e) {
-                    logEvent('Immediate_Socket_Reconnect_Error', { error: (e as Error).message });
+                    // Handle immediate reconnect error
                 }
             }
 
@@ -171,13 +131,10 @@ export function WebRTCConnection({ isInitiator }: WebRTCConnectionProps) {
             if (missingRequirements.socketDisconnected && !missingRequirements.sessionMissing &&
                 !missingRequirements.streamMissing && socketRetryCount < 5) {
 
-                logEvent('Scheduling_Socket_Retry', { retryCount: socketRetryCount + 1 });
-
                 // Schedule retry with exponential backoff (1s, 2s, 4s, 8s, 10s)
                 socketRetryRef.current = setTimeout(() => {
                     // Try to force reconnect if we have access to that function
                     if (typeof socket?.connect === 'function') {
-                        logEvent('Retry_Socket_Connect');
                         socket.connect();
                     }
 
@@ -198,26 +155,17 @@ export function WebRTCConnection({ isInitiator }: WebRTCConnectionProps) {
 
         // Only proceed if we're in the right state to create a connection
         if (isInitiator && status !== 'calling') {
-            logEvent('Initiator_Wrong_Status', { status });
             return;
         }
 
         if (!isInitiator && status !== 'connected') {
-            logEvent('Receiver_Wrong_Status', { status });
             return;
         }
 
         // Check if we already initialized the peer for this connection
         if (isPeerInitialized && peerRef.current) {
-            logEvent('Peer_Already_Initialized');
             return;
         }
-
-        logEvent('Creating_Peer', {
-            role: isInitiator ? 'initiator' : 'receiver',
-            hasSignalData: !!signalData,
-            socketConnected: isConnected
-        });
 
         try {
             // Create the peer connection
@@ -235,60 +183,46 @@ export function WebRTCConnection({ isInitiator }: WebRTCConnectionProps) {
 
             // If we're the receiver, feed in the signal data from the caller
             if (!isInitiator && signalData) {
-                logEvent('Receiver_Signaling_With_Offer', { hasData: !!signalData });
                 try {
                     peer.signal(signalData);
                 } catch (error) {
-                    logEvent('Error_Applying_Offer', { error: (error as Error).message });
                     console.error('Error applying offer signal:', error);
                 }
             }
 
             // Handle signals for connection negotiation
             peer.on('signal', (data) => {
-                logEvent('Generated_Signal', {
-                    signalType: data.type,
-                    isInitiator
-                });
-
                 if (isInitiator && receiver) {
                     // Initiator sends call offer
-                    logEvent('Initiator_Sending_Call', { to: receiver.id });
                     socketCallUser(receiver.id, channelId!, data, callType!);
                 } else if (!isInitiator && caller) {
                     // Receiver sends answer
-                    logEvent('Receiver_Sending_Answer', { to: caller.id });
                     socketAnswerCall(caller.id, data);
                 }
             });
 
             // Handle incoming stream
             peer.on('stream', (incomingStream) => {
-                logEvent('Received_Remote_Stream');
                 setRemoteStream(incomingStream);
             });
 
             // Handle connection status
             peer.on('connect', () => {
-                logEvent('Peer_Connected', { isInitiator });
                 console.log('Peer connection established!');
             });
 
             // Handle ICE state changes
             peer.on('iceStateChange', (state) => {
-                logEvent('ICE_State_Changed', { state });
             });
 
             // Handle errors
             peer.on('error', (err) => {
-                logEvent('Peer_Error', { error: err.message });
                 console.error('Peer connection error:', err);
                 endCall();
             });
 
             // Handle close events
             peer.on('close', () => {
-                logEvent('Peer_Connection_Closed');
                 console.log('Peer connection closed');
             });
 
@@ -298,7 +232,6 @@ export function WebRTCConnection({ isInitiator }: WebRTCConnectionProps) {
 
             // Clean up on unmount
             return () => {
-                logEvent('Cleaning_Up_Peer');
                 if (peerRef.current) {
                     peerRef.current.destroy();
                     peerRef.current = null;
@@ -306,7 +239,6 @@ export function WebRTCConnection({ isInitiator }: WebRTCConnectionProps) {
                 setIsPeerInitialized(false);
             };
         } catch (error) {
-            logEvent('Failed_To_Create_Peer', { error: (error as Error).message });
             console.error('Failed to create peer connection:', error);
             endCall();
         }
@@ -327,7 +259,6 @@ export function WebRTCConnection({ isInitiator }: WebRTCConnectionProps) {
         setRemoteStream,
         endCall,
         isPeerInitialized,
-        logEvent,
         socketRetryCount
     ]);
 

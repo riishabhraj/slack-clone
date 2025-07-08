@@ -16,12 +16,10 @@ import {
 import { cn } from '@/lib/utils';
 import { WebRTCConnection } from './WebRTCConnection';
 import { useSession } from 'next-auth/react';
-import { useDebugLogger } from '@/hooks/useDebugLogger';
 import { useSocket } from '@/hooks/useSocket';
 
 export function CallModal() {
     const { data: session } = useSession();
-    const { logEvent } = useDebugLogger();
     const { isConnected: socketConnected } = useSocket();
     const {
         status,
@@ -44,35 +42,24 @@ export function CallModal() {
     const localVideoRef = useRef<HTMLVideoElement>(null);
     const remoteVideoRef = useRef<HTMLVideoElement>(null);
 
-    // Log when the component mounts or call status changes
+    // Monitor call status
     useEffect(() => {
-        logEvent('CallModal_Status', {
-            status,
-            callType,
-            socketConnected,
-            hasLocalStream: !!localStream,
-            hasRemoteStream: !!remoteStream,
-            caller: caller ? { id: caller.id, name: caller.name } : null,
-            receiver: receiver ? { id: receiver.id, name: receiver.name } : null,
-            currentUser: session?.user?.id
-        });
-    }, [status, callType, localStream, remoteStream, caller, receiver, session, socketConnected, logEvent]);
+        // No debug logging in production
+    }, [status, callType, localStream, remoteStream, caller, receiver, session, socketConnected]);
 
     // Connect local stream to video element
     useEffect(() => {
         if (localStream && localVideoRef.current) {
             localVideoRef.current.srcObject = localStream;
-            logEvent('LocalStream_Connected_To_Video');
         }
-    }, [localStream, logEvent]);
+    }, [localStream]);
 
     // Connect remote stream to video element
     useEffect(() => {
         if (remoteStream && remoteVideoRef.current) {
             remoteVideoRef.current.srcObject = remoteStream;
-            logEvent('RemoteStream_Connected_To_Video');
         }
-    }, [remoteStream, logEvent]);
+    }, [remoteStream]);
 
     // Don't render anything if not in a call
     if (status === 'idle') {
@@ -83,14 +70,6 @@ export function CallModal() {
     // If we have a caller object, then we are the receiver
     // If we don't have a caller object, then we are the caller (initiator)
     const isInitiator = caller === null;
-
-    logEvent('CallModal_Rendering', {
-        isInitiator,
-        status,
-        userId: session?.user?.id,
-        callerId: caller?.id,
-        receiverId: receiver?.id
-    });
 
     // Different UI based on call status
     return (
@@ -144,22 +123,14 @@ export function CallModal() {
                             </div>
                             <div className="flex space-x-4">
                                 <button
-                                    onClick={() => {
-                                        logEvent('Call_Rejected_By_User');
-                                        rejectCall();
-                                    }}
+                                    onClick={() => rejectCall()}
                                     className="p-3 bg-destructive rounded-full hover:bg-destructive/90 transition"
                                     aria-label="Reject call"
                                 >
                                     <PhoneOff className="h-6 w-6 text-destructive-foreground" />
                                 </button>
                                 <button
-                                    onClick={() => {
-                                        logEvent('Call_Accepted_By_User');
-                                        acceptCall().catch(error => {
-                                            logEvent('Accept_Call_Error', { error: error.message });
-                                        });
-                                    }}
+                                    onClick={() => acceptCall().catch(error => console.error(error))}
                                     className="p-3 bg-green-500 rounded-full hover:bg-green-600 transition"
                                     aria-label="Accept call"
                                 >
@@ -181,10 +152,7 @@ export function CallModal() {
                             </div>
                             <div className="flex space-x-4">
                                 <button
-                                    onClick={() => {
-                                        logEvent('Call_Cancelled_By_Caller');
-                                        endCall();
-                                    }}
+                                    onClick={() => endCall()}
                                     className="p-3 bg-destructive rounded-full hover:bg-destructive/90 transition"
                                     aria-label="End call"
                                 >
@@ -249,10 +217,7 @@ export function CallModal() {
                 {status === 'connected' && (
                     <div className="p-4 border-t border-border flex items-center justify-center space-x-4">
                         <button
-                            onClick={() => {
-                                toggleAudio();
-                                logEvent('Audio_Toggled', { muted: !isAudioMuted });
-                            }}
+                            onClick={() => toggleAudio()}
                             className={cn(
                                 "p-3 rounded-full transition",
                                 isAudioMuted ? "bg-destructive" : "bg-muted hover:bg-muted/80"
@@ -268,10 +233,7 @@ export function CallModal() {
 
                         {callType === 'video' && (
                             <button
-                                onClick={() => {
-                                    toggleVideo();
-                                    logEvent('Video_Toggled', { muted: !isVideoMuted });
-                                }}
+                                onClick={() => toggleVideo()}
                                 className={cn(
                                     "p-3 rounded-full transition",
                                     isVideoMuted ? "bg-destructive" : "bg-muted hover:bg-muted/80"
@@ -288,13 +250,7 @@ export function CallModal() {
 
                         {callType === 'video' && (
                             <button
-                                onClick={() => {
-                                    toggleScreenShare().then(() => {
-                                        logEvent('ScreenShare_Toggled', { sharing: !isScreenSharing });
-                                    }).catch(error => {
-                                        logEvent('ScreenShare_Error', { error: error.message });
-                                    });
-                                }}
+                                onClick={() => toggleScreenShare().catch(console.error)}
                                 className={cn(
                                     "p-3 rounded-full transition",
                                     isScreenSharing ? "bg-primary" : "bg-muted hover:bg-muted/80"
@@ -306,10 +262,7 @@ export function CallModal() {
                         )}
 
                         <button
-                            onClick={() => {
-                                logEvent('Call_Ended_By_User');
-                                endCall();
-                            }}
+                            onClick={() => endCall()}
                             className="p-3 bg-destructive rounded-full hover:bg-destructive/90 transition"
                             aria-label="End call"
                         >
