@@ -208,7 +208,7 @@ export function WebRTCConnection({ isInitiator }: WebRTCConnectionProps) {
 
             // Handle connection status
             peer.on('connect', () => {
-                console.log('Peer connection established!');
+                // Connection established
             });
 
             // Handle ICE state changes
@@ -223,7 +223,7 @@ export function WebRTCConnection({ isInitiator }: WebRTCConnectionProps) {
 
             // Handle close events
             peer.on('close', () => {
-                console.log('Peer connection closed');
+                // Peer connection closed
             });
 
             // Store the peer instance

@@ -28,7 +28,6 @@ export function CallButton({
 
     // Don't show call buttons for the current user
     if (!session?.user || session.user.id === receiverId) {
-        console.log('Not showing call button - current user or no session');
         return null;
     }
 
@@ -43,7 +42,6 @@ export function CallButton({
         setMenuOpen(false);
 
         try {
-            console.log(`Starting ${callType} call to user ${receiverId} in channel ${channelId}`);
             await startCall(
                 callType,
                 channelId,

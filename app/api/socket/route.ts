@@ -1,6 +1,5 @@
 import { Server as SocketIOServer } from 'socket.io';
 import { NextResponse } from 'next/server';
-import type { RemoteSocket } from 'socket.io';
 
 // Define interface for connected users
 interface ConnectedUser {
@@ -19,12 +18,22 @@ if (!global.socketIOServer) {
     global.socketIOServer = null;
 }
 
+// Response interface
+interface SocketAPIResponse {
+    success: boolean;
+    message: string;
+    connectedUsers: ConnectedUser[];
+    serverInfo?: {
+        port: number;
+        path: string;
+    }
+}
+
 // Socket.IO API handler - This just reports status, doesn't actually initialize socket server
-// The real Socket.IO initialization happens in server.ts
+// The real Socket.IO initialization happens in server.js
 export async function GET(req: Request) {
     try {
         // Check if Socket.IO seems to be running based on global variable
-        // This doesn't actually initialize it - that happens in server.ts
         const isSocketServerRunning = global.socketIOServer !== null;
 
         // Get connected clients count if server is running
@@ -39,12 +48,14 @@ export async function GET(req: Request) {
                 // Get sockets
                 const sockets = await global.socketIOServer.fetchSockets();
 
-                // Extract more detailed user info from socket handshakes
+                // Extract more detailed user info from socket data
                 connectedUsers = sockets.map(socket => {
-                    const userId = socket.handshake?.auth?.userId || socket.id;
-                    const userName = socket.handshake?.auth?.name || 'Anonymous';
+                    // Get user data from socket.data (populated during authentication)
+                    // @ts-ignore - socket.data might not be in the type definitions
+                    const userData = socket.data || {};
+                    const userId = userData.userId || socket.id;
+                    const userName = userData.name || 'Anonymous';
 
-                    // RemoteSocket doesn't have a 'connected' property
                     // If we can fetch the socket via fetchSockets(), it's connected
                     const isConnected = true;
 
@@ -60,20 +71,17 @@ export async function GET(req: Request) {
             }
         }
 
-        // Define response type with proper structure
-        interface SocketAPIResponse {
-            success: boolean;
-            message: string;
-            connectedUsers: ConnectedUser[];
-        }
-
         // Return status information
         const response: SocketAPIResponse = {
             success: true,
             message: isSocketServerRunning
                 ? `Socket.IO server is running with ${clientsCount} clients connected`
-                : "Socket.IO server status unknown. Make sure you're using the custom server (server.ts)",
-            connectedUsers: isSocketServerRunning ? connectedUsers : []
+                : "Socket.IO server status unknown. Make sure the custom server (server.js) is running",
+            connectedUsers: isSocketServerRunning ? connectedUsers : [],
+            serverInfo: {
+                port: process.env.PORT ? parseInt(process.env.PORT) : 4000,
+                path: '/socket.io'
+            }
         };
 
         return NextResponse.json(response);
@@ -99,7 +107,7 @@ export async function POST(req: Request) {
         if (!global.socketIOServer) {
             const response: SocketActionResponse = {
                 success: false,
-                message: "Socket.IO server not initialized"
+                message: "Socket.IO server not initialized. Make sure server.js is running."
             };
             return NextResponse.json(response, { status: 400 });
         }

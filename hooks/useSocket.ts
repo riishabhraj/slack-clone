@@ -9,9 +9,21 @@ import { ClientToServerEvents, ServerToClientEvents } from '@/lib/socket';
 // We'll use the any type for the socket instance to avoid TypeScript errors with reconnection events
 let socket: Socket | null = null;
 let reconnectAttempts = 0;
-const MAX_RECONNECT_ATTEMPTS = 10; // Increased maximum reconnection attempts
-const RECONNECT_DELAY_MS = 1500; // Reduced delay for faster recovery
-const CONNECTION_TIMEOUT_MS = 15000; // Increased timeout for slower connections
+const MAX_RECONNECT_ATTEMPTS = 10;
+const RECONNECT_DELAY_MS = 1500;
+const CONNECTION_TIMEOUT_MS = 15000;
+
+// Control logging based on environment
+const enableLogs = process.env.NODE_ENV === 'development' &&
+                  process.env.NEXT_PUBLIC_ENABLE_SOCKET_LOGS !== 'false';
+
+// Logger utility to easily control all socket-related logs
+const logger = {
+    log: (...args: any[]) => {
+        if (enableLogs) console.log(...args);
+    },
+    error: (...args: any[]) => console.error(...args) // Always log errors
+};
 
 export function useSocket() {
     const { data: session, status } = useSession();
@@ -42,41 +54,51 @@ export function useSocket() {
         }
 
         try {
-            // Create auth data
+            // Create auth data with all required fields
             const authData = {
                 userId: session.user.id,
-                name: session.user.name,
-                image: session.user.image
+                name: session.user.name || 'Anonymous',
+                image: session.user.image || null
             };
 
             // Force disconnect if socket exists but isn't connected
-            if (socket && !socket.connected) {
+            if (socket) {
                 socket.disconnect();
                 socket = null;
             }
 
-            // Create new socket
-            // In development, force use of http not ws protocol to avoid certificate issues
+            // Create new socket - Use only the custom server.js implementation
             const socketUrl = process.env.NODE_ENV === 'development'
-                ? 'http://localhost:4000'  // Hard-code to HTTP in development
+                ? 'http://localhost:4000'  // Development server on port 4000
                 : (process.env.NEXT_PUBLIC_SOCKET_URL || window.location.origin);
 
-            socket = io(socketUrl, {
-                withCredentials: true,
-                path: '/socket.io', // Always use /socket.io path for consistency
-                reconnection: true,
-                reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
-                reconnectionDelay: RECONNECT_DELAY_MS,
-                timeout: CONNECTION_TIMEOUT_MS,
-                transports: ['websocket', 'polling'], // Try WebSocket first, then fall back to polling
-                auth: authData
-            });
+            // Only log socket URL in development
+            logger.log('Connecting to Socket.IO server at:', socketUrl);
 
-            // Set up event listeners
-            setupSocketListeners(authData);
+            // Only create a new socket if one doesn't exist
+            if (!socket) {
+                socket = io(socketUrl, {
+                    withCredentials: true,
+                    path: '/socket.io', // Make sure this matches the server
+                    reconnection: true,
+                    reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
+                    reconnectionDelay: RECONNECT_DELAY_MS,
+                    timeout: CONNECTION_TIMEOUT_MS,
+                    transports: ['websocket', 'polling'], // Match order with server
+                    autoConnect: false, // Start with autoConnect off
+                    auth: authData // Include auth data immediately
+                });
+
+                // Set up event listeners
+                setupSocketListeners(authData);
+
+                // Only connect after setting up listeners
+                socket.connect();
+            }
 
             return true;
         } catch (error) {
+            logger.error('Socket connection error:', error);
             return false;
         }
     }, [status, session]);
@@ -85,102 +107,136 @@ export function useSocket() {
     const setupSocketListeners = useCallback((authData: any) => {
         if (!socket) return;
 
+        // Clean up any existing listeners first to prevent duplicates
+        socket.off('connect');
+        socket.off('disconnect');
+        socket.off('connect_error');
+        socket.off('reconnect');
+        socket.off('authenticated');
+        socket.off('unauthorized');
+
         // Set up event listeners
         socket.on('connect', () => {
+            logger.log('Socket connected:', socket?.id);
             setIsConnected(true);
             reconnectAttempts = 0; // Reset reconnect attempts on successful connection
 
-            // Send authentication data
+            // Send authentication data immediately after connecting
             socket?.emit('authenticate', authData);
         });
 
-        socket.on('disconnect', () => {
+        socket.on('disconnect', (reason) => {
+            logger.log('Socket disconnected:', reason);
             setIsConnected(false);
+
+            // Don't reconnect if the server initiated a disconnect with reason 'io server disconnect'
+            if (reason === 'io server disconnect') {
+                logger.log('Server initiated disconnect, will not auto-reconnect');
+            }
+            // No else clause needed - socket.io handles auto-reconnect
         });
 
-        socket.on('connect_error', () => {
-            setIsConnected(false);
-
-            // Manual reconnect logic if needed
-            if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-                reconnectAttempts++;
-                setTimeout(() => {
-                    socket?.connect();
-                }, RECONNECT_DELAY_MS);
+        socket.on('connect_error', (err) => {
+            if (reconnectAttempts === 0 || reconnectAttempts === MAX_RECONNECT_ATTEMPTS) {
+                // Only log on first and last attempts to reduce console noise
+                logger.error('Socket connection error:', err.message);
             }
+            setIsConnected(false);
+            reconnectAttempts++;
         });
 
         // @ts-ignore - reconnect event is part of socket.io-client but not in our type definitions
-        socket.on('reconnect', () => {
+        socket.on('reconnect', (attemptNumber) => {
+            logger.log(`Socket reconnected after ${attemptNumber} attempts`);
             setIsConnected(true);
 
             // Re-send authentication data on reconnect
             socket?.emit('authenticate', authData);
         });
+
+        socket.on('authenticated', () => {
+            logger.log('Socket authenticated successfully');
+        });
+
+        socket.on('unauthorized', (error) => {
+            logger.error('Socket unauthorized:', error);
+        });
     }, []);
 
     useEffect(() => {
         // Only initialize socket when session is authenticated
-        if (status !== 'authenticated') {
+        if (status !== 'authenticated' || !session?.user?.id) {
             return;
         }
 
-        // Create auth data
-        const authData = {
-            userId: session?.user?.id,
-            name: session?.user?.name,
-            image: session?.user?.image
-        };
+        logger.log('Session authenticated, setting up socket connection');
 
-        // Initialize socket if it doesn't exist or if it's not connected
-        if (!socket) {
-            ensureSocketConnection();
-        } else if (!socket.connected) {
-            socket.connect();
-        }
+        // Initialize socket
+        ensureSocketConnection();
 
-        // Set up event listeners
-        setupSocketListeners(authData);
-
-        // Clean up function just removes listeners, doesn't disconnect
+        // Clean up function - IMPORTANT: We do NOT disconnect the socket here
+        // Just remove listeners to avoid memory leaks
         return () => {
-            // We don't disconnect or destroy the socket, just clean up listeners specific to this hook instance
+            if (socket) {
+                socket.off('connect');
+                socket.off('disconnect');
+                socket.off('connect_error');
+                socket.off('reconnect');
+                socket.off('authenticated');
+                socket.off('unauthorized');
+                logger.log('Removed socket event listeners');
+            }
         };
     }, [status, session, setupSocketListeners, ensureSocketConnection]);
 
     // Force reconnect function that can be called if needed
     const forceReconnect = () => {
         if (socket) {
+            logger.log('Force reconnecting socket...');
             socket.disconnect();
 
             // Small timeout to ensure disconnect is processed
             setTimeout(() => {
-                socket?.connect();
+                if (socket) {
+                    socket.connect();
+                }
             }, 500);
+        } else {
+            ensureSocketConnection();
         }
     };
 
     // Function to join a channel
     const joinChannel = (channelId: string) => {
-        if (socket && isConnected) {
-            socket.emit('joinChannel', channelId);
+        if (!isConnected || !socket) {
+            if (enableLogs) logger.log('Cannot join channel - socket not connected');
+            ensureSocketConnection();
+            return false;
         }
+
+        socket.emit('joinChannel', channelId);
+        return true;
     };
 
     // Function to leave a channel
     const leaveChannel = (channelId: string) => {
         if (socket && isConnected) {
             socket.emit('leaveChannel', channelId);
+            return true;
         }
+        return false;
     };
 
     // Function to send a message via socket
     const emitMessage = (channelId: string, content: string) => {
-        if (socket && isConnected) {
-            socket.emit('sendMessage', { channelId, content });
-            return true;
+        if (!isConnected || !socket) {
+            if (enableLogs) logger.log('Cannot send message - socket not connected');
+            ensureSocketConnection();
+            return false;
         }
-        return false;
+
+        socket.emit('sendMessage', { channelId, content });
+        return true;
     };
 
     // Function to send a typing indicator
@@ -230,7 +286,9 @@ export function useSocket() {
 
         if (socket && isConnected) {
             socket.emit('rejectCall', { to, reason });
+            return true;
         }
+        return false;
     };
 
     // Function to end a call
@@ -239,7 +297,9 @@ export function useSocket() {
 
         if (socket && isConnected) {
             socket.emit('endCall', { to, reason });
+            return true;
         }
+        return false;
     };
 
     // Function to send ICE candidate
@@ -248,7 +308,9 @@ export function useSocket() {
 
         if (socket && isConnected) {
             socket.emit('sendIceCandidate', { to, candidate });
+            return true;
         }
+        return false;
     };
 
     return {
@@ -265,6 +327,6 @@ export function useSocket() {
         rejectCall,
         endCall,
         sendIceCandidate,
-        ensureSocketConnection // Expose the ensureSocketConnection function
+        ensureSocketConnection
     };
 }
