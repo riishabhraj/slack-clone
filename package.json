@@ -12,6 +12,8 @@
     "build:no-optimize": "NEXT_DISABLE_OPTIMIZATION=true next build",
     "start": "node server.js",
     "start:next": "next start",
+    "start:socket": "node start-socket-server.js",
+    "start:socket:prod": "NODE_ENV=production node start-socket-server.js",
     "start:prod": "NODE_ENV=production node server.js",
     "lint": "next lint",
     "approve-builds": "pnpm approve-builds @prisma/client @prisma/engines @tailwindcss/oxide bcrypt prisma sharp unrs-resolver"

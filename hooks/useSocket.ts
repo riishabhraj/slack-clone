@@ -75,19 +75,29 @@ export function useSocket() {
             // Only log socket URL in development
             logger.log('Connecting to Socket.IO server at:', socketUrl);
 
+            // Get current domain to determine if we're connecting to same origin or cross-origin
+            const currentDomain = window.location.origin;
+            const isSameOrigin = socketUrl === currentDomain;
+
             // Only create a new socket if one doesn't exist
             if (!socket) {
+                // The key fix for CORS issues:
+                // 1. For cross-origin requests in production, we need withCredentials: true
+                // 2. For same-origin requests or localhost development, we don't need withCredentials
+                const useCredentials = !isSameOrigin && process.env.NODE_ENV === 'production';
+
+                logger.log(`Socket connection mode: ${useCredentials ? 'Cross-origin with credentials' : 'Standard'}`);
+
                 socket = io(socketUrl, {
-                    withCredentials: true,
-                    path: '/socket.io', // Make sure this matches the server
+                    withCredentials: useCredentials,
+                    path: '/socket.io',
                     reconnection: true,
                     reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
                     reconnectionDelay: RECONNECT_DELAY_MS,
                     timeout: CONNECTION_TIMEOUT_MS,
-                    transports: ['polling', 'websocket'], // Start with polling, fall back to WebSocket
+                    transports: ['polling', 'websocket'], // Start with polling for better compatibility
                     autoConnect: false, // Start with autoConnect off
                     forceNew: true, // Force a new connection each time
-                    upgrade: true, // Enable transport upgrade (polling -> websocket)
                     auth: authData // Include auth data immediately
                 });
 
@@ -139,10 +149,29 @@ export function useSocket() {
         });
 
         socket.on('connect_error', (err) => {
-            if (reconnectAttempts === 0 || reconnectAttempts === MAX_RECONNECT_ATTEMPTS) {
-                // Only log on first and last attempts to reduce console noise
-                logger.error('Socket connection error:', err.message);
+            // Always log the first error, then only log every 3 attempts to reduce noise
+            if (reconnectAttempts === 0 || reconnectAttempts % 3 === 0 || reconnectAttempts === MAX_RECONNECT_ATTEMPTS - 1) {
+                logger.error(`Socket connection error (attempt ${reconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS}):`, err.message);
+
+                // Log extra diagnostics on first attempt
+                if (reconnectAttempts === 0) {
+                    // Log additional context for debugging
+                    // Log what we can without accessing private properties
+                    logger.error('Connection details:', {
+                        socketId: socket?.id || 'not connected',
+                        connected: socket?.connected || false,
+                        // @ts-ignore - accessing some properties that might be useful for debugging
+                        transports: socket?.io?.opts?.transports || ['unknown'],
+                        withCredentials: socket?.io?.opts?.withCredentials || false
+                    });
+
+                    // Check if this is a CORS error
+                    if (err.message.includes('CORS') || err.message.includes('cross-origin')) {
+                        logger.error('CORS ERROR: Check that your server allows the correct origin and credentials mode');
+                    }
+                }
             }
+
             setIsConnected(false);
 
             // Add fallback to polling if WebSocket fails

@@ -19,6 +19,54 @@ const logger = {
     error: (...args) => console.error(...args) // Always show errors
 };
 
+// Get allowed origins from environment or use defaults
+const getAllowedOrigins = () => {
+    if (dev) {
+        return ['http://localhost:3000'];
+    }
+
+    // Production: use specific origins from env var or default to common domains
+    const envOrigins = process.env.ALLOWED_ORIGINS;
+    if (envOrigins) {
+        return envOrigins.split(',');
+    }
+
+    // Default production origins - update with your actual domains
+    return [
+        'https://slack-clone-b4hu.vercel.app',
+        'https://slack-clone.vercel.app',
+        'https://slack-clone-git-main.vercel.app'
+    ];
+};
+
+// CORS origin checker function
+const corsOriginChecker = (requestOrigin, callback) => {
+    const allowedOrigins = getAllowedOrigins();
+
+    // No origin (like from a mobile app) - allow the request but don't return a wildcard
+    if (!requestOrigin) {
+        // For requests without an origin, we can't return a wildcard when credentials are true
+        // So we return the first allowed origin or null which will omit the header
+        return callback(null, allowedOrigins[0] || null);
+    }
+
+    // Check if origin is allowed
+    if (allowedOrigins.indexOf(requestOrigin) !== -1) {
+        // Return the exact origin that matched, important for credentials mode
+        return callback(null, requestOrigin);
+    }
+
+    // In development, be more permissive
+    if (dev && (requestOrigin.startsWith('http://localhost:') || requestOrigin.startsWith('http://127.0.0.1:'))) {
+        logger.log(`Development mode - allowing localhost origin: ${requestOrigin}`);
+        return callback(null, requestOrigin);
+    }
+
+    // Log the rejected origin for debugging
+    logger.error(`CORS blocked for origin: ${requestOrigin}`);
+    callback(new Error(`Origin ${requestOrigin} not allowed by CORS`), false);
+};
+
 // prepare next app
 const app = next({ dev, hostname, port: dev ? 3000 : port });  // Use port 3000 for Next.js in dev, but same port in production
 const handle = app.getRequestHandler();
@@ -41,12 +89,15 @@ app.prepare().then(() => {
     const io = new Server(server, {
         path: '/socket.io',
         cors: {
-            // In production, accept connections from any origin
-            // In development, limit to localhost:3000
-            origin: dev ? ['http://localhost:3000'] : '*',
+            // When withCredentials is true, we can't use wildcard '*' for origin
+            // We must specify the exact origins or use a function that returns the origin
+            origin: corsOriginChecker,
             methods: ['GET', 'POST', 'OPTIONS'],
             credentials: true,
-            allowedHeaders: ['Content-Type', 'Authorization']
+            allowedHeaders: ['Content-Type', 'Authorization'],
+            // Important for CORS preflight requests
+            preflightContinue: false,
+            optionsSuccessStatus: 204
         },
         // Add this configuration for better compatibility and stability
         allowEIO3: true,
