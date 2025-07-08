@@ -15,7 +15,7 @@ const CONNECTION_TIMEOUT_MS = 15000;
 
 // Control logging based on environment
 const enableLogs = process.env.NODE_ENV === 'development' &&
-                  process.env.NEXT_PUBLIC_ENABLE_SOCKET_LOGS !== 'false';
+    process.env.NEXT_PUBLIC_ENABLE_SOCKET_LOGS !== 'false';
 
 // Logger utility to easily control all socket-related logs
 const logger = {
@@ -84,8 +84,10 @@ export function useSocket() {
                     reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
                     reconnectionDelay: RECONNECT_DELAY_MS,
                     timeout: CONNECTION_TIMEOUT_MS,
-                    transports: ['websocket', 'polling'], // Match order with server
+                    transports: ['polling', 'websocket'], // Start with polling, fall back to WebSocket
                     autoConnect: false, // Start with autoConnect off
+                    forceNew: true, // Force a new connection each time
+                    upgrade: true, // Enable transport upgrade (polling -> websocket)
                     auth: authData // Include auth data immediately
                 });
 
@@ -142,6 +144,14 @@ export function useSocket() {
                 logger.error('Socket connection error:', err.message);
             }
             setIsConnected(false);
+
+            // Add fallback to polling if WebSocket fails
+            if (err.message.includes('websocket') && socket) {
+                logger.log('WebSocket connection failed, falling back to polling');
+                // Force to use only polling
+                socket.io.opts.transports = ['polling'];
+            }
+
             reconnectAttempts++;
         });
 

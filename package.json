@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "dev:socket": "node server.js",
+    "dev:socket": "node start-socket-server.js",
     "postinstall": "node scripts/prisma-generate.js",
     "prisma:generate": "node scripts/prisma-generate.js",
     "vercel-build": "node scripts/vercel-build.js",

@@ -41,13 +41,18 @@ app.prepare().then(() => {
     const io = new Server(server, {
         path: '/socket.io',
         cors: {
-            origin: dev ? ['http://localhost:3000'] : true, // Allow Next.js origin in development
-            methods: ['GET', 'POST'],
-            credentials: true
+            // In production, accept connections from any origin
+            // In development, limit to localhost:3000
+            origin: dev ? ['http://localhost:3000'] : '*',
+            methods: ['GET', 'POST', 'OPTIONS'],
+            credentials: true,
+            allowedHeaders: ['Content-Type', 'Authorization']
         },
-        // Add this configuration for better compatibility
+        // Add this configuration for better compatibility and stability
         allowEIO3: true,
-        transports: ['websocket', 'polling'] // Prioritize websocket over polling
+        transports: ['polling', 'websocket'], // Start with polling for better compatibility
+        pingTimeout: 60000, // Longer timeout for unstable connections
+        pingInterval: 25000 // More frequent pings to detect disconnection
     });
 
     // Store connected users
@@ -57,6 +62,16 @@ app.prepare().then(() => {
     io.on('connection', (socket) => {
         // Log connection only when needed
         logger.log(`Socket connected: ${socket.id}`);
+
+        // Log socket handshake details in debug mode to help diagnose issues
+        if (process.env.DEBUG_SOCKETS === 'true') {
+            logger.log('Socket handshake:', {
+                headers: socket.handshake.headers,
+                address: socket.handshake.address,
+                secure: socket.request.secure,
+                protocol: socket.request.headers['x-forwarded-proto'] || 'http'
+            });
+        }
 
         // Set up socket authentication
         socket.on('authenticate', (authData) => {
