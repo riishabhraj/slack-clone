@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "dev:socket": "node start-socket-server.js",
+    "dev:socket": "node server.js",
+    "dev:all": "concurrently \"npm run dev\" \"npm run dev:socket\"",
     "postinstall": "node scripts/prisma-generate.js",
     "prisma:generate": "node scripts/prisma-generate.js",
     "vercel-build": "node scripts/vercel-build.js",
@@ -12,10 +13,11 @@
     "build:no-optimize": "NEXT_DISABLE_OPTIMIZATION=true next build",
     "start": "node server.js",
     "start:next": "next start",
-    "start:socket": "node start-socket-server.js",
-    "start:socket:prod": "NODE_ENV=production node start-socket-server.js",
+    "start:socket": "node server.js",
+    "start:socket:prod": "NODE_ENV=production node prod-socket-server.js",
     "start:prod": "NODE_ENV=production node server.js",
     "lint": "next lint",
+    "test:socket": "node test-socket-connection.js",
     "approve-builds": "pnpm approve-builds @prisma/client @prisma/engines @tailwindcss/oxide bcrypt prisma sharp unrs-resolver"
   },
   "dependencies": {

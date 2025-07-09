@@ -67,39 +67,49 @@ export function useSocket() {
                 socket = null;
             }
 
-            // Create new socket - Use only the custom server.js implementation
+            // Create new socket with environment-specific configuration
+            // In production, always use the dedicated socket server
+            const productionSocketUrl = 'https://slack-clone-socket.onrender.com';
             const socketUrl = process.env.NODE_ENV === 'development'
                 ? 'http://localhost:4000'  // Development server on port 4000
-                : (process.env.NEXT_PUBLIC_SOCKET_URL || window.location.origin);
+                : productionSocketUrl;
 
-            // Only log socket URL in development
             logger.log('Connecting to Socket.IO server at:', socketUrl);
 
-            // Get current domain to determine if we're connecting to same origin or cross-origin
+            // Determine if this is a cross-origin connection
             const currentDomain = window.location.origin;
-            const isSameOrigin = socketUrl === currentDomain;
+            const isCrossOrigin = socketUrl !== currentDomain;
 
             // Only create a new socket if one doesn't exist
             if (!socket) {
-                // The key fix for CORS issues:
-                // 1. For cross-origin requests in production, we need withCredentials: true
-                // 2. For same-origin requests or localhost development, we don't need withCredentials
-                const useCredentials = !isSameOrigin && process.env.NODE_ENV === 'production';
-
-                logger.log(`Socket connection mode: ${useCredentials ? 'Cross-origin with credentials' : 'Standard'}`);
-
-                socket = io(socketUrl, {
-                    withCredentials: useCredentials,
+                // IMPORTANT FIX FOR PRODUCTION:
+                // In production with cross-origin requests, we must NOT use withCredentials
+                // unless the server is set up to return the specific origin rather than a wildcard
+                const socketOpts = {
                     path: '/socket.io',
                     reconnection: true,
                     reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
                     reconnectionDelay: RECONNECT_DELAY_MS,
                     timeout: CONNECTION_TIMEOUT_MS,
-                    transports: ['polling', 'websocket'], // Start with polling for better compatibility
-                    autoConnect: false, // Start with autoConnect off
-                    forceNew: true, // Force a new connection each time
-                    auth: authData // Include auth data immediately
-                });
+                    transports: ['polling', 'websocket'],
+                    autoConnect: false,
+                    auth: authData
+                };
+
+                // For production cross-origin connections, don't use withCredentials
+                // This avoids the CORS error with wildcard origins
+                if (process.env.NODE_ENV === 'production' && isCrossOrigin) {
+                    // Using without credentials to avoid CORS issues with wildcard origins
+                    logger.log('Using production cross-origin mode without credentials');
+                    socket = io(socketUrl, socketOpts);
+                } else {
+                    // For development or same-origin connections
+                    logger.log('Using standard connection mode');
+                    socket = io(socketUrl, {
+                        ...socketOpts,
+                        withCredentials: true
+                    });
+                }
 
                 // Set up event listeners
                 setupSocketListeners(authData);
